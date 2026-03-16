@@ -1,0 +1,4 @@
+Version,Cost per Result,Results,Reach,Impressions,Amount spent,Currency,Confidence,Is Winner,Objective,Key metric,Test Name (ID)
+Meta | EMEA | SE | 25'Q3 | EarlySummerOffer2025 | TextOnlyAssetMix - Cell A,18.14860041,3944,1258010,9684572,71578.08,USD,<0.050,No,Sales,Cost per result,Early Summer Promo Asset Mix Test-SE (1218932812684465)
+Meta | EMEA | SE | 25'Q3 | EarlySummerOffer2025 | AllAssetMix - Cell C,15.99514782,4431,1303111,9739324,70874.5,USD,<0.050,No,Sales,Cost per result,Early Summer Promo Asset Mix Test-SE (1218932812684465)
+Meta | EMEA | SE | 25'Q3 | EarlySummerOffer2025 | StrikethroughAssetMix - Cell B,14.96287424,4763,1245465,9960924,71268.17,USD,>0.950,Yes,Sales,Cost per result,Early Summer Promo Asset Mix Test-SE (1218932812684465)
