@@ -1,0 +1,14 @@
+[theme]
+base = "dark"
+
+# Brand colors
+primaryColor = "#7ED957"          # light green (actions, sliders, highlights)
+
+# Backgrounds
+backgroundColor = "#0B1C2D"       # deep navy blue (main background)
+secondaryBackgroundColor = "#12263A"  # slightly lighter blue (sidebar, cards)
+
+# Text
+textColor = "#E6F2F0"             # soft off-white with green tint
+
+font = "sans serif"
