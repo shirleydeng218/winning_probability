@@ -46,7 +46,7 @@ confidence intervals, and density plots. Configure Azure OpenAI via environment 
 LLM-generated summaries; otherwise a rule-based fallback is used.
 
 For additional details, please refer to [the App Documentation](https://docs.google.com/document/d/1XgL30F5GybUdpCsJemZ0kCmOeFwRZDxizqZFM9dJpu8/edit?tab=t.0).
-For questions or support, contact Max Wilson or Shirley Deng on the BLADE team.
+For questions or support, please contact Shirley Deng (shirley.deng@disney.com) or Max Wilson (maxim.wilson@disney.com) on the BLADE team.
         """
     )
 
