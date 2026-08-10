@@ -15,8 +15,17 @@ pip install -r requirements.txt
 2. Run the app:
 
 ```bash
-streamlit run winning_prob_app.py
+streamlit run app.py
 ```
+
+Or with Docker:
+
+```bash
+docker build -t winprob .
+docker run -p 8501:8501 winprob
+```
+
+Legacy entry points (`winning_prob_app.py`, `winning_prob_app_llm.py`) still work but `app.py` is the recommended entry point.
 
 Notes
 
