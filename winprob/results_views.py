@@ -378,8 +378,8 @@ def render_incrementality_results(
 
     st.markdown("---")
     section_anchor(
-        "full-analysis",
-        "Full Analysis",
+        "full-test-summary",
+        "Full Test Summary",
         caption="Results, exports, and AI summary across all conversion metrics in this test.",
         level="subheader",
     )

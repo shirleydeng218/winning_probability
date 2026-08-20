@@ -293,7 +293,7 @@ def render_sidebar_glossary(
                 _render_metric_nav_links(selected_metric=selected_metric)
 
             if full_analysis_nav:
-                _render_nav_group("Full analysis · all metrics", full_analysis_nav)
+                _render_nav_group("Full Test Summary · all metrics", full_analysis_nav)
 
             elif nav_sections and not has_metric_nav:
                 _render_nav_group("Sections", nav_sections)

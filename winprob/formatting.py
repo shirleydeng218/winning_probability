@@ -44,8 +44,10 @@ def fmt_significance(value: Any, na: str = "N/A") -> str:
 
 
 def fmt_cvr_lift(value: Any, na: str = "N/A") -> str:
-    """Absolute CVR lift as percent with 2 decimal places."""
-    return fmt_significance(value, na=na)
+    """Absolute CVR lift as percent with 4 decimal places."""
+    if _is_missing(value):
+        return na
+    return f"{float(value) * 100:.4f}%"
 
 
 def fmt_relative_cvr_lift(value: Any, na: str = "N/A") -> str:
