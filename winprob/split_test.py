@@ -10,12 +10,16 @@ import seaborn as sns
 import streamlit as st
 from scipy.stats import norm
 
+from winprob.dashboard import render_test_banner
+from winprob.glossary import render_sidebar_glossary
+from winprob.formatting import fmt_count, fmt_cps, fmt_cvr_lift, fmt_winning_probability
 from winprob.llm_summary import build_split_summary_context
 from winprob.plotting import apply_dark_axes, cache_and_download_figure
 from winprob.ui import render_ai_summary_section
 
 
 def run_split_test_app():
+    render_sidebar_glossary(context="split_test")
     st.header("Split Test (A/B/C, no control)")
 
     # Functions
@@ -211,7 +215,13 @@ def run_split_test_app():
     st.subheader('Test Name')
     ##without the file extension
     test_name = input_file.name.split('.')[0]
-    st.write(test_name)
+    per_cell_metrics = df.groupby('cell_name')[['experiment_cost_usd', 'n_test']].mean()
+    render_test_banner(
+        test_name,
+        n_cells=per_cell_metrics.shape[0],
+        total_spend=per_cell_metrics['experiment_cost_usd'].sum(),
+        total_reach=int(per_cell_metrics['n_test'].sum()),
+    )
 
 
     # ------------------------
@@ -242,7 +252,7 @@ def run_split_test_app():
 
     results = pd.DataFrame(results_rows) if results_rows else pd.DataFrame()
 
-    compare_on = st.selectbox('Comparison metric for winning probability:', 
+    compare_on = st.selectbox('Comparison metric for Winning Probability:', 
                             options=['conversion_rate', 'conversions'])
 
     # Clear cached results if compare_on changes
@@ -301,22 +311,21 @@ def run_split_test_app():
                                                 'cps': 'CPS',
                                                 'win_prob': 'Winning Probability'})
     # add , to users_reached and impressions
-    summary_table['users_reached'] = summary_table['users_reached'].apply(lambda x: f"{x:,}")
-    summary_table['impressions'] = summary_table['impressions'].apply(lambda x: f"{x:,}")
+    summary_table['users_reached'] = summary_table['users_reached'].apply(fmt_count)
+    summary_table['impressions'] = summary_table['impressions'].apply(fmt_count)
 
-    # format lift_vs_zero, ci_low/high: if conversions, then 0 decimal places; if conversion_rate, then percentage
     if compare_on == 'conversion_rate':
-        summary_table['lift_vs_zero'] = summary_table['lift_vs_zero'].apply(lambda x: f"{x:.3%}")
-        summary_table['ci_low'] = summary_table['ci_low'].apply(lambda x: f"{x:.3%}")
-        summary_table['ci_high'] = summary_table['ci_high'].apply(lambda x: f"{x:.3%}")
+        summary_table['lift_vs_zero'] = summary_table['lift_vs_zero'].apply(fmt_cvr_lift)
+        summary_table['ci_low'] = summary_table['ci_low'].apply(fmt_cvr_lift)
+        summary_table['ci_high'] = summary_table['ci_high'].apply(fmt_cvr_lift)
     else:
-        summary_table['lift_vs_zero'] = summary_table['lift_vs_zero'].apply(lambda x: f"{x:.0f}")
-        summary_table['ci_low'] = summary_table['ci_low'].apply(lambda x: f"{x:.0f}")
-        summary_table['ci_high'] = summary_table['ci_high'].apply(lambda x: f"{x:.0f}")
+        summary_table['lift_vs_zero'] = summary_table['lift_vs_zero'].apply(fmt_count)
+        summary_table['ci_low'] = summary_table['ci_low'].apply(fmt_count)
+        summary_table['ci_high'] = summary_table['ci_high'].apply(fmt_count)
 
-    summary_table['p_value'] = summary_table['p_value'].apply(lambda x: f"{x:.3f}" if pd.notnull(x) else 'N/A')
-
-    summary_table['Winning Probability'] = summary_table['Winning Probability'].apply(lambda x: f"{x:.1%}")
+    summary_table['p_value'] = summary_table['p_value'].apply(lambda x: f"{x:.4f}" if pd.notnull(x) else 'N/A')
+    summary_table['CPS'] = summary_table['CPS'].apply(fmt_cps)
+    summary_table['Winning Probability'] = summary_table['Winning Probability'].apply(fmt_winning_probability)
     st.write(summary_table.set_index('Cell'))
 
     # ---- cache CSVs ----

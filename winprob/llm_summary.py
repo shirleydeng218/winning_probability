@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import requests
 
+from winprob.formatting import fmt_cpis, fmt_cps, fmt_significance, fmt_threshold, fmt_winning_probability
+
 
 def _safe_float(value: Any) -> Optional[float]:
     try:
@@ -167,7 +169,7 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
         metric_name = metric_block.get("metric", "Unknown metric")
         winner = metric_block.get("top_winner_by_winning_probability", "N/A")
         lines.append(f"**{metric_name}**")
-        lines.append(f"- Recommended winner by winning probability: **{winner}**")
+        lines.append(f"- Recommended winner by Winning Probability: **{winner}**")
 
         if context.get("test_type") == "incrementality":
             threshold = metric_block.get("significance_threshold")
@@ -177,7 +179,7 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
                 if not cell.get("eligible_to_win")
             ]
             if threshold is not None:
-                lines.append(f"- Significance threshold: **{threshold:.0%}**")
+                lines.append(f"- Significance threshold: **{fmt_threshold(threshold)}**")
             if ineligible:
                 lines.append(
                     f"- Ineligible cells due to significance: {', '.join(ineligible)}"
@@ -189,20 +191,20 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
             reverse=True,
         ):
             win_prob = cell.get("winning_probability")
-            win_prob_text = f"{win_prob:.1%}" if win_prob is not None else "N/A"
+            win_prob_text = fmt_winning_probability(win_prob) if win_prob is not None else "N/A"
             if context.get("test_type") == "incrementality":
                 cpis = cell.get("cpis_usd")
-                cpis_text = f"${cpis:,.2f}" if cpis is not None else "N/A"
+                cpis_text = fmt_cpis(cpis) if cpis is not None else "N/A"
                 lines.append(
-                    f"- {cell['cell']}: winning probability {win_prob_text}, "
-                    f"CPiS {cpis_text}, significance "
-                    f"{(cell.get('significance') or 0):.1%}"
+                    f"- {cell['cell']}: Winning Probability {win_prob_text}, "
+                    f"CPiS {cpis_text}, Significance "
+                    f"{fmt_significance(cell.get('significance') or 0)}"
                 )
             else:
                 cps = cell.get("cps_usd")
-                cps_text = f"${cps:,.2f}" if cps is not None else "N/A"
+                cps_text = fmt_cps(cps) if cps is not None else "N/A"
                 lines.append(
-                    f"- {cell['cell']}: winning probability {win_prob_text}, CPS {cps_text}"
+                    f"- {cell['cell']}: Winning Probability {win_prob_text}, CPS {cps_text}"
                 )
 
         lines.append(
@@ -216,31 +218,52 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
     return "\n".join(lines).strip()
 
 
-def _build_prompt(context: Dict[str, Any]) -> List[Dict[str, str]]:
+def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[Dict[str, str]]:
+    if audience == "analyst":
+        tone = "Use precise statistical language, cite uncertainty, and reference posterior overlap and eligibility rules."
+    else:
+        tone = "Use plain language for marketing stakeholders. Avoid jargon where possible."
+
     system_prompt = (
         "You are a media test analytics assistant for Disney and Hulu incrementality/split tests. "
-        "Write a concise executive summary for marketers and analysts. "
+        f"{tone} "
         "Use only the provided JSON. Do not invent metrics. "
-        "Explain the winner, CPiS/CPS, significance caveats, CI interpretation, and density plot interpretation. "
-        "If no cell is eligible or winning probability is split, say so clearly. "
-        "End with a practical recommendation and confidence level."
+        "If no cell is eligible or winning probability is split, say so clearly."
     )
     user_prompt = (
         "Summarize this media test analysis.\n\n"
-        "Return markdown with these sections:\n"
-        "1. Recommended Winner\n"
-        "2. Why This Cell Won\n"
-        "3. Efficiency and Impact (CPiS/CPS, incremental conversions or CVR)\n"
-        "4. Significance and Caveats\n"
-        "5. Confidence Interval Interpretation\n"
-        "6. Density Plot Interpretation\n"
-        "7. Final Recommendation\n\n"
+        "Return markdown with EXACTLY these section headers:\n"
+        "## Recommended Winner\n"
+        "## Why This Cell Won\n"
+        "## Efficiency and Impact\n"
+        "## Significance and Caveats\n"
+        "## Confidence Interval Interpretation\n"
+        "## Density Plot Interpretation\n"
+        "## Final Recommendation\n\n"
         f"Input JSON:\n{json.dumps(context, indent=2, default=str)}"
     )
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _build_prompt_legacy(context: Dict[str, Any]) -> List[Dict[str, str]]:
+    return _build_prompt(context, audience="marketer")
+
+
+def build_structured_rule_based_summary(context: Dict[str, Any], talking_points: Optional[Dict[str, List[str]]] = None) -> str:
+    sections = ["## Recommended Winner", ""]
+    for metric_block in context.get("metrics", []):
+        metric_name = metric_block.get("metric", "Unknown metric")
+        winner = metric_block.get("top_winner_by_winning_probability", "N/A")
+        sections.append(f"**{metric_name}:** {winner}")
+        if talking_points:
+            for cell, bullets in talking_points.items():
+                if bullets:
+                    sections.append(f"- **{cell}:** {bullets[0]}")
+    sections.extend(["", "## Why This Cell Won", build_rule_based_summary(context)])
+    return "\n".join(sections)
 
 
 def _call_azure_openai(messages: List[Dict[str, str]]) -> str:
@@ -271,20 +294,25 @@ def _call_azure_openai(messages: List[Dict[str, str]]) -> str:
     return payload["choices"][0]["message"]["content"]
 
 
-def generate_analysis_summary(context: Dict[str, Any], use_llm: bool = True) -> Dict[str, str]:
+def generate_analysis_summary(
+    context: Dict[str, Any],
+    use_llm: bool = True,
+    audience: str = "marketer",
+    talking_points: Optional[Dict[str, List[str]]] = None,
+) -> Dict[str, str]:
     cache_key = hashlib.sha256(
-        json.dumps(context, sort_keys=True, default=str).encode("utf-8")
+        json.dumps({"context": context, "audience": audience}, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
 
     if not use_llm:
         return {
-            "summary": build_rule_based_summary(context),
+            "summary": build_structured_rule_based_summary(context, talking_points),
             "source": "rule_based",
             "cache_key": cache_key,
         }
 
     try:
-        summary = _call_azure_openai(_build_prompt(context))
+        summary = _call_azure_openai(_build_prompt(context, audience=audience))
         return {
             "summary": summary,
             "source": "azure_openai",
@@ -292,7 +320,7 @@ def generate_analysis_summary(context: Dict[str, Any], use_llm: bool = True) -> 
         }
     except Exception:
         return {
-            "summary": build_rule_based_summary(context),
+            "summary": build_structured_rule_based_summary(context, talking_points),
             "source": "rule_based_fallback",
             "cache_key": cache_key,
         }

@@ -2,13 +2,13 @@
 
 import streamlit as st
 
-from winprob.main import run
-
 st.set_page_config(
     page_title="WinProb: Media Test Evaluator",
     page_icon="👑",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
+
+from winprob.main import run
 
 run()
