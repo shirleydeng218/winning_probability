@@ -61,16 +61,56 @@ def inject_app_styles() -> None:
             padding-top: 1rem;
         }}
 
+        .winprob-nav-group {{
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+            margin-bottom: 0.85rem;
+        }}
+        .winprob-nav-group-label {{
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: {MUTED};
+            margin: 0 0 0.35rem 0;
+            line-height: 1.3;
+        }}
         .winprob-nav-link {{
             display: block;
-            color: {MINT};
+            color: {TEXT};
             text-decoration: none;
-            padding: 0.2rem 0;
-            font-size: 0.92rem;
+            padding: 0.32rem 0.55rem;
+            font-size: 0.875rem;
+            line-height: 1.35;
+            border-radius: 6px;
+            border-left: 2px solid transparent;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         }}
         .winprob-nav-link:hover {{
-            color: #FFFFFF;
-            text-decoration: underline;
+            color: {MINT};
+            background: {PANEL};
+            border-left-color: {GREEN};
+            text-decoration: none;
+        }}
+        .winprob-nav-sublink {{
+            padding-left: 0.85rem;
+            font-size: 0.84rem;
+        }}
+        .winprob-nav-nested-sublink {{
+            padding-left: 1.25rem;
+            font-size: 0.8rem;
+            color: {MUTED};
+        }}
+        .winprob-nav-nested-sublink:hover {{
+            color: {MINT};
+        }}
+        [data-testid="stSidebar"] h2 {{
+            font-size: 0.95rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: {MUTED};
+            margin-bottom: 0.5rem;
         }}
 
         .winprob-hero {{
@@ -285,7 +325,7 @@ def render_hero(text: str, *, label: str = "WinProb") -> None:
     st.markdown(
         f'<div class="winprob-hero">'
         f'<div class="winprob-hero-title">{_safe_html(label)}</div>'
-        f'<p class="winprob-hero-body">{_safe_html(text)}</p>'
+        f'<p class="winprob-hero-body">{_inline_md(text)}</p>'
         f"</div>",
         unsafe_allow_html=True,
     )

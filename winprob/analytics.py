@@ -10,7 +10,7 @@ from winprob.formatting import (
     LABEL_WINNING_PROBABILITY,
     fmt_count,
     fmt_cpis,
-    fmt_cvr_lift,
+    fmt_relative_cvr_lift,
     fmt_significance,
     fmt_threshold,
     fmt_winning_probability,
@@ -25,7 +25,7 @@ def _rule_sort_score(row: pd.Series, winning_rule: str) -> float:
     if winning_rule == "highest_incremental":
         return float(row["incremental_conversions"])
     if winning_rule == "highest_cvr_lift":
-        return float(row["cvr_lift"])
+        return float(row["relative_cvr_lift"])
     raise ValueError(f"Unknown winning rule: {winning_rule}")
 
 
@@ -63,7 +63,7 @@ def build_multi_metric_rankings(win_prob_df: pd.DataFrame, metric: str) -> pd.Da
         ("win_prob", "Winning Probability", False),
         ("cpis", "CPiS", True),
         ("incremental_conversions", "Incremental Conversions", False),
-        ("cvr_lift", "Absolute CVR Lift", False),
+        ("relative_cvr_lift", "Relative CVR Lift", False),
         ("conf_level", "Significance", False),
     ]
 
@@ -213,7 +213,7 @@ def generate_talking_points(
         win_prob = float(row["win_prob"])
         cpis = float(row["cpis"])
         inc = float(row["incremental_conversions"])
-        lift = float(row["cvr_lift"])
+        lift = float(row["relative_cvr_lift"])
         conf = float(row["conf_level"])
         eligible = bool(row.get("significance_eligible", False))
 
@@ -236,7 +236,7 @@ def generate_talking_points(
         else:
             takeaway = (
                 f"{fmt_winning_probability(win_prob)} Winning Probability, "
-                f"{fmt_cpis(cpis)} CPiS, {fmt_cvr_lift(lift)} Absolute CVR Lift."
+                f"{fmt_cpis(cpis)} CPiS, {fmt_relative_cvr_lift(lift)} Relative CVR Lift."
             )
 
         bullets = [takeaway]

@@ -14,8 +14,8 @@ SLIDES_URL = (
 
 def render_app_intro() -> None:
     render_hero(
-        "Estimate <strong>Winning Probability</strong> across test cells, compare "
-        "<strong>CPiS</strong>, <strong>CVR lift</strong>, and <strong>Incremental Conversions</strong>, "
+        "Estimate **Winning Probability** across test cells, compare "
+        "**CPiS**, **Relative CVR lift**, and **Incremental Conversions**, "
         "and generate a stakeholder-ready executive summary. Use the sidebar to explore scenarios "
         "without re-uploading data."
     )

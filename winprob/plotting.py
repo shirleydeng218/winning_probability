@@ -6,7 +6,56 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 
-from winprob.config import GRID, NAVY, RED, TEXT
+from winprob.config import GREEN, GRID, NAVY, RED, TEXT
+
+
+def figure_to_png_bytes(fig) -> bytes:
+    """Render a matplotlib figure to PNG bytes and close the figure."""
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def render_ci_errorbar_figure(
+    plot_df,
+    *,
+    title: str,
+    y_label: str,
+    point_col: str,
+    lo_col: str,
+    hi_col: str,
+    as_percent: bool = False,
+):
+    """Matplotlib CI error-bar chart for export and offline use."""
+    if plot_df.empty:
+        return None
+
+    scale = 100.0 if as_percent else 1.0
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for _, row in plot_df.iterrows():
+        cell = row["study_name"]
+        point = float(row[point_col]) * scale
+        lo = float(row[lo_col]) * scale
+        hi = float(row[hi_col]) * scale
+        ax.errorbar(
+            x=[cell],
+            y=[point],
+            yerr=[[point - lo], [hi - point]],
+            fmt="o",
+            color=GREEN,
+            ecolor=GREEN,
+            capsize=5,
+            capthick=2,
+        )
+    ax.axhline(0, color=RED, linestyle="--", linewidth=1.5)
+    ax.set_title(title)
+    ax.set_ylabel(y_label)
+    plt.xticks(rotation=25, ha="right")
+    apply_dark_axes(ax, zero_line=False)
+    fig.tight_layout()
+    return fig
 
 
 def render_incrementality_density_grid(plot_df, sample_col, x_label, x_tick_format='percent'):

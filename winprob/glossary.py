@@ -73,7 +73,7 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
     "configure": [
         {
             "term": "Winning rule",
-            "definition": "How the recommended winner is chosen among eligible cells: lowest CPiS, highest incremental conversions, or highest CVR lift.",
+            "definition": "How the recommended winner is chosen among eligible cells: lowest CPiS, highest incremental conversions, or highest relative CVR lift.",
         },
         {
             "term": "Minimum significance",
@@ -113,42 +113,6 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
             "term": "Significance / eligibility",
             "definition": "Whether a cell meets the minimum confidence threshold to be considered for winning.",
         },
-        {
-            "term": "Executive summary",
-            "definition": "Stakeholder readout: recommendation, winner metrics, and a per-cell status table with one-line takeaways.",
-        },
-        {
-            "term": "Multi-metric rankings",
-            "definition": "Rank order of cells across Winning Probability, CPiS, lift, and Significance on normalized scores.",
-        },
-        {
-            "term": "Cell comparison (radar)",
-            "definition": "Normalized spider chart comparing cells across key performance dimensions.",
-        },
-        {
-            "term": "Pairwise win matrix",
-            "definition": "Heatmap of head-to-head winning probability between every pair of cells.",
-        },
-        {
-            "term": "Posterior overlap",
-            "definition": "How often two cells' simulated outcomes are statistically indistinguishable.",
-        },
-        {
-            "term": "Sensitivity analysis",
-            "definition": "How the recommended winner changes as the significance threshold varies.",
-        },
-        {
-            "term": "Budget optimizer",
-            "definition": "Projects incremental conversions if additional budget were allocated by CPiS efficiency.",
-        },
-        {
-            "term": "Confidence intervals",
-            "definition": "Uncertainty bands around absolute lift estimates by cell and metric.",
-        },
-        {
-            "term": "Density plots",
-            "definition": "Posterior distributions for CVR lift and incremental conversions from simulation.",
-        },
     ],
     "split_test": [
         {
@@ -167,7 +131,7 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
 }
 
 UPLOAD_NAV: List[NavSection] = [
-    {"label": "Upload & Validate", "anchor": "upload-validate"},
+    {"label": "Upload & validate", "anchor": "upload-validate"},
     {"label": "Input validation", "anchor": "input-validation"},
     {"label": "Column reference", "anchor": "column-reference"},
 ]
@@ -177,23 +141,24 @@ CONFIGURE_NAV: List[NavSection] = [
     {"label": "Test overview", "anchor": "test-overview"},
 ]
 
-RESULTS_GLOBAL_NAV: List[NavSection] = [
-    {"label": "Per-cell metrics", "anchor": "per-cell-performance-metrics"},
-    {"label": "Winning probability summary", "anchor": "winning-probability-summary"},
-    {"label": "Confidence intervals", "anchor": "confidence-intervals"},
-    {"label": "Interactive density plots", "anchor": "interactive-density-plots"},
-    {"label": "Static density plots", "anchor": "static-density-plots"},
-    {"label": "Export readout pack", "anchor": "export-readout-pack"},
+RESULTS_FULL_ANALYSIS_NAV: List[NavSection] = [
+    {"label": "Full results table", "anchor": "winning-probability-summary"},
+    {"label": "Export readout", "anchor": "export-readout-pack"},
     {"label": "AI summary", "anchor": "ai-summary"},
 ]
 
 METRIC_SECTIONS: List[NavSection] = [
     {"label": "Executive summary", "anchor_suffix": "executive-summary"},
-    {"label": "Multi-metric rankings", "anchor_suffix": "multi-metric-rankings"},
+    {"label": "Per-cell metrics", "anchor_suffix": "per-cell-metrics"},
+    {"label": "Rankings", "anchor_suffix": "multi-metric-rankings"},
     {"label": "Cell comparison", "anchor_suffix": "cell-comparison"},
+    {"label": "Distribution & uncertainty", "anchor_suffix": "distribution-uncertainty"},
+    {"label": "Advanced analysis", "anchor_suffix": "advanced-analysis"},
+]
+
+METRIC_ADVANCED_SUBSECTIONS: List[NavSection] = [
     {"label": "Pairwise win matrix", "anchor_suffix": "pairwise-win-matrix"},
     {"label": "Posterior overlap", "anchor_suffix": "posterior-overlap"},
-    {"label": "Sensitivity", "anchor_suffix": "sensitivity"},
     {"label": "Budget optimizer", "anchor_suffix": "budget-optimizer"},
 ]
 
@@ -202,12 +167,102 @@ def metric_anchor(metric: str, section_suffix: str) -> str:
     return f"{slugify(metric)}-{section_suffix}"
 
 
-def _render_nav_links(sections: List[NavSection]) -> None:
+def _truncate_nav_label(text: str, max_len: int = 40) -> str:
+    text = text.strip()
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 1].rstrip()}…"
+
+
+def _render_nav_links(
+    sections: List[NavSection],
+    *,
+    sub: bool = False,
+    nested: bool = False,
+) -> str:
+    from winprob.ui_styles import _safe_html
+
+    if nested:
+        css_class = "winprob-nav-link winprob-nav-sublink winprob-nav-nested-sublink"
+    elif sub:
+        css_class = "winprob-nav-link winprob-nav-sublink"
+    else:
+        css_class = "winprob-nav-link"
+
+    links = []
     for section in sections:
+        label = _safe_html(section["label"])
+        anchor = _safe_html(section["anchor"])
+        links.append(f'<a class="{css_class}" href="#{anchor}">{label}</a>')
+    return "\n".join(links)
+
+
+def _render_nav_group(label: str, sections: List[NavSection], *, sub: bool = False) -> None:
+    from winprob.ui_styles import _safe_html
+
+    if not sections:
+        return
+    body = _render_nav_links(sections, sub=sub)
+    st.markdown(
+        f'<div class="winprob-nav-group">'
+        f'<div class="winprob-nav-group-label">{_safe_html(label)}</div>'
+        f"{body}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_metric_nav_links(*, selected_metric: str) -> None:
+    """Render flat metric-scoped section links with advanced sub-items."""
+    metric_sections = [{
+        "label": section["label"],
+        "anchor": metric_anchor(selected_metric, section["anchor_suffix"]),
+    } for section in METRIC_SECTIONS]
+
+    _render_nav_group(
+        f"Selected metric · {_truncate_nav_label(selected_metric)}",
+        metric_sections,
+        sub=True,
+    )
+
+    advanced_sections = [{
+        "label": section["label"],
+        "anchor": metric_anchor(selected_metric, section["anchor_suffix"]),
+    } for section in METRIC_ADVANCED_SUBSECTIONS]
+    if advanced_sections:
         st.markdown(
-            f'<a class="winprob-nav-link" href="#{section["anchor"]}">{section["label"]}</a>',
+            f'<div class="winprob-nav-group">{_render_nav_links(advanced_sections, sub=True, nested=True)}</div>',
             unsafe_allow_html=True,
         )
+
+
+def _render_glossary_terms(context: str, *, key_suffix: str) -> None:
+    terms = GLOSSARY.get(context, [])
+    if not terms:
+        return
+
+    query = st.text_input(
+        "Search terms",
+        placeholder="Filter glossary…",
+        key=f"glossary_search_{key_suffix}",
+        label_visibility="collapsed",
+    ).strip().lower()
+
+    filtered = [
+        term
+        for term in terms
+        if not query
+        or query in term["term"].lower()
+        or query in term["definition"].lower()
+    ]
+
+    if not filtered:
+        st.caption("No matching terms.")
+        return
+
+    for term in filtered:
+        with st.expander(term["term"], expanded=bool(query)):
+            st.caption(term["definition"])
 
 
 def render_sidebar_glossary(
@@ -215,61 +270,39 @@ def render_sidebar_glossary(
     context: str,
     nav_sections: Optional[List[NavSection]] = None,
     metrics: Optional[List[str]] = None,
+    selected_metric: Optional[str] = None,
+    full_analysis_nav: Optional[List[NavSection]] = None,
 ) -> None:
-    """Render searchable glossary and optional jump links in the sidebar."""
+    """Render compact jump links and optional glossary in the sidebar."""
     with st.sidebar:
+        has_metric_nav = bool(metrics and selected_metric)
+        has_full_analysis_nav = bool(full_analysis_nav)
+        has_page_nav = bool(nav_sections) and not has_metric_nav
+        has_nav = has_metric_nav or has_full_analysis_nav or has_page_nav
+        has_glossary = bool(GLOSSARY.get(context))
+
+        if not has_nav and not has_glossary:
+            return
+
         st.markdown("---")
-        st.header("Glossary & Navigation")
 
-        if nav_sections:
-            st.markdown("**On this page**")
-            _render_nav_links(nav_sections)
-            st.markdown("")
+        if has_nav:
+            st.subheader("On this page")
 
-        if metrics:
-            st.markdown("**By conversion metric**")
-            selected_metric = st.selectbox(
-                "Metric sections",
-                options=metrics,
-                key=f"glossary_metric_nav_{context}",
-                label_visibility="collapsed",
-            )
-            metric_links = [
-                {
-                    "label": section["label"],
-                    "anchor": metric_anchor(selected_metric, section["anchor_suffix"]),
-                }
-                for section in METRIC_SECTIONS
-            ]
-            _render_nav_links(metric_links)
-            st.markdown("")
+            if has_metric_nav:
+                _render_metric_nav_links(selected_metric=selected_metric)
 
-        terms = GLOSSARY.get(context, [])
-        if not terms:
-            return
+            if full_analysis_nav:
+                _render_nav_group("Full analysis · all metrics", full_analysis_nav)
 
-        query = st.text_input(
-            "Search glossary",
-            placeholder="Filter terms…",
-            key=f"glossary_search_{context}",
-        ).strip().lower()
+            elif nav_sections and not has_metric_nav:
+                _render_nav_group("Sections", nav_sections)
 
-        filtered = [
-            term
-            for term in terms
-            if not query
-            or query in term["term"].lower()
-            or query in term["definition"].lower()
-        ]
-
-        if not filtered:
-            st.caption("No glossary terms match your search.")
-            return
-
-        st.markdown(f"**Terms ({len(filtered)})**")
-        for term in filtered:
-            with st.expander(term["term"], expanded=bool(query)):
-                st.caption(term["definition"])
+        if has_glossary:
+            if has_nav:
+                st.markdown("")
+            with st.expander("Glossary", expanded=False):
+                _render_glossary_terms(context, key_suffix=context)
 
 
 def inject_navigation_styles() -> None:

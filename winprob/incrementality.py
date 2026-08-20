@@ -8,19 +8,10 @@ import streamlit as st
 from scipy.stats import norm
 
 from winprob.dashboard import render_test_banner
-from winprob.formatting import (
-    LABEL_ABSOLUTE_CVR_LIFT,
-    LABEL_CPIS,
-    LABEL_ELIGIBLE_TO_WIN,
-    LABEL_INCREMENTAL_CONVERSIONS,
-    LABEL_RELATIVE_CVR_LIFT,
-    LABEL_SIGNIFICANCE,
-    fmt_threshold,
-    format_per_cell_metrics,
-)
+from winprob.formatting import fmt_threshold
 from winprob.glossary import (
     CONFIGURE_NAV,
-    RESULTS_GLOBAL_NAV,
+    RESULTS_FULL_ANALYSIS_NAV,
     UPLOAD_NAV,
     inject_navigation_styles,
     render_sidebar_glossary,
@@ -68,7 +59,15 @@ def _standardize_df(raw: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _render_sidebar_config(namespace: str, *, glossary_context: str = "configure", nav_sections=None, metrics=None):
+def _render_sidebar_config(
+    namespace: str,
+    *,
+    glossary_context: str = "configure",
+    nav_sections=None,
+    full_analysis_nav=None,
+    metrics=None,
+):
+    selected_metric = None
     with st.sidebar:
         st.header("Scenario Settings")
         winning_rule = st.selectbox(
@@ -93,14 +92,22 @@ def _render_sidebar_config(namespace: str, *, glossary_context: str = "configure
             step=1000,
             key=f"{namespace}_n_sims",
         )
+        if metrics:
+            selected_metric = st.selectbox(
+                "Conversion metric",
+                options=sorted(metrics),
+                key=f"{namespace}_results_metric",
+            )
         st.caption("Switch scenarios without re-uploading to see how the recommended winner changes.")
 
     render_sidebar_glossary(
         context=glossary_context,
         nav_sections=nav_sections,
+        full_analysis_nav=full_analysis_nav,
         metrics=metrics,
+        selected_metric=selected_metric,
     )
-    return winning_rule, significance_threshold, n_sims
+    return winning_rule, significance_threshold, n_sims, selected_metric
 
 
 def run_incrementality_app():
@@ -113,7 +120,7 @@ def run_incrementality_app():
 
     # ---- Step 1: Upload & Validate ----
     if step == 0:
-        winning_rule, significance_threshold, n_sims = _render_sidebar_config(
+        winning_rule, significance_threshold, n_sims, _ = _render_sidebar_config(
             namespace, glossary_context="upload", nav_sections=UPLOAD_NAV
         )
         section_anchor("upload-validate", "Upload & Validate")
@@ -186,7 +193,7 @@ def run_incrementality_app():
 
     # ---- Step 2: Configure ----
     if step == 1:
-        winning_rule, significance_threshold, n_sims = _render_sidebar_config(
+        winning_rule, significance_threshold, n_sims, _ = _render_sidebar_config(
             namespace, glossary_context="configure", nav_sections=CONFIGURE_NAV
         )
         section_anchor("configure-analysis", "Configure Analysis")
@@ -242,10 +249,10 @@ def run_incrementality_app():
     df = df[df["conversion_segment"].isin(conversion_metrics)]
     test_name = st.session_state.get(f"{namespace}_test_name", "Test")
 
-    winning_rule, significance_threshold, n_sims = _render_sidebar_config(
+    winning_rule, significance_threshold, n_sims, selected_metric = _render_sidebar_config(
         namespace,
         glossary_context="results",
-        nav_sections=RESULTS_GLOBAL_NAV,
+        full_analysis_nav=RESULTS_FULL_ANALYSIS_NAV,
         metrics=sorted(conversion_metrics),
     )
 
@@ -276,17 +283,6 @@ def run_incrementality_app():
         winning_rule=winning_rule,
     )
 
-    section_anchor("per-cell-performance-metrics", "Per-Cell Performance Metrics")
-    per_cell_display = results[[
-        "cell", "metric", "cvr_lift", "relative_cvr_lift",
-        "incremental_conversions", "cpis", "conf_level", "significance_eligible",
-    ]].rename(columns={
-        "cell": "Cell", "metric": "Metric", "cvr_lift": LABEL_ABSOLUTE_CVR_LIFT,
-        "relative_cvr_lift": LABEL_RELATIVE_CVR_LIFT, "incremental_conversions": LABEL_INCREMENTAL_CONVERSIONS,
-        "cpis": LABEL_CPIS, "conf_level": LABEL_SIGNIFICANCE, "significance_eligible": LABEL_ELIGIBLE_TO_WIN,
-    })
-    st.dataframe(format_per_cell_metrics(per_cell_display), use_container_width=True)
-
     summary_context = build_incrementality_summary_context(
         test_name=test_name,
         significance_threshold=significance_threshold,
@@ -316,6 +312,7 @@ def run_incrementality_app():
         significance_threshold=significance_threshold,
         winning_rule=winning_rule,
         n_sims=n_sims,
+        selected_metric=selected_metric or sorted(conversion_metrics)[0],
         summary_context=summary_context,
         render_ai_summary_fn=lambda ctx, session_namespace: render_ai_summary_section(
             ctx, session_namespace, talking_points=talking_points

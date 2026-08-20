@@ -5,6 +5,7 @@ import re
 
 import streamlit as st
 
+from winprob.glossary import section_anchor
 from winprob.llm_summary import context_cache_key, generate_analysis_summary
 
 
@@ -23,9 +24,11 @@ def _render_structured_summary(summary_text: str) -> None:
 
 
 def render_ai_summary_section(context, session_namespace, talking_points=None):
-    st.markdown("---")
-    st.markdown('<div id="ai-summary"></div>', unsafe_allow_html=True)
-    st.subheader("AI Summary")
+    section_anchor(
+        "ai-summary",
+        "AI Summary",
+        caption="Summarizes the full test across all conversion metrics and cells.",
+    )
 
     audience = st.radio(
         "Summary audience",

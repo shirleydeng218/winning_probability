@@ -9,7 +9,7 @@ from scipy.stats import beta
 WINNING_RULES = {
     "lowest_cpis": "Lowest CPiS (efficiency)",
     "highest_incremental": "Highest incremental conversions (scale)",
-    "highest_cvr_lift": "Highest absolute CVR lift (rate)",
+    "highest_cvr_lift": "Highest relative CVR lift (rate)",
 }
 
 DEFAULT_SIGNIFICANCE_THRESHOLD = 0.90
@@ -53,6 +53,7 @@ def build_posterior_results(metrics_df: pd.DataFrame, alpha_prior: float = 1.0, 
                     "ctl_beta_posterior": ctl_beta,
                     "cpis": r["cpis"],
                     "spend": r["experiment_cost_usd"],
+                    "test_conversions": r["treatment_conversions"],
                     "population_test": r["treatment_user_count"],
                     "conf_level": r["absolute_lift_confidence_level"],
                     "cvr_lift": cvr_lift,
@@ -66,7 +67,7 @@ def build_posterior_results(metrics_df: pd.DataFrame, alpha_prior: float = 1.0, 
 def _score_samples(
     incrementals: np.ndarray,
     cpis_samples: np.ndarray,
-    cvr_lift_samples: np.ndarray,
+    relative_cvr_lift_samples: np.ndarray,
     winning_rule: str,
     eligible: bool,
 ) -> np.ndarray:
@@ -78,7 +79,7 @@ def _score_samples(
     if winning_rule == "highest_incremental":
         return np.where(incrementals > 0, incrementals, -np.inf)
     if winning_rule == "highest_cvr_lift":
-        return np.where(cvr_lift_samples > 0, cvr_lift_samples, -np.inf)
+        return np.where(relative_cvr_lift_samples > 0, relative_cvr_lift_samples, -np.inf)
     raise ValueError(f"Unknown winning rule: {winning_rule}")
 
 
@@ -118,6 +119,7 @@ def run_incrementality_simulation(
                 "incremental": [],
                 "cpis": [],
                 "cvr_lift": [],
+                "relative_cvr_lift": [],
             }
 
             score_matrix = []
@@ -135,6 +137,8 @@ def run_incrementality_simulation(
                     ctl = np.zeros(n_sims)
 
                 cvr_lift_samples = test - ctl
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    relative_cvr_lift_samples = np.where(ctl > 0, cvr_lift_samples / ctl, np.nan)
                 incrementals = cvr_lift_samples * pop
                 with np.errstate(divide="ignore", invalid="ignore"):
                     cpis_samples = spend / incrementals
@@ -142,8 +146,11 @@ def run_incrementality_simulation(
                 sim_store["incremental"].append(incrementals)
                 sim_store["cpis"].append(cpis_samples)
                 sim_store["cvr_lift"].append(cvr_lift_samples)
+                sim_store["relative_cvr_lift"].append(relative_cvr_lift_samples)
                 score_matrix.append(
-                    _score_samples(incrementals, cpis_samples, cvr_lift_samples, winning_rule, eligible)
+                    _score_samples(
+                        incrementals, cpis_samples, relative_cvr_lift_samples, winning_rule, eligible
+                    )
                 )
 
                 sub_row = pd.DataFrame({
@@ -180,7 +187,9 @@ def run_incrementality_simulation(
                         elif winning_rule == "highest_incremental":
                             pairwise.loc[cell_a, cell_b] = (sim_store["incremental"][a] > sim_store["incremental"][b]).mean()
                         else:
-                            pairwise.loc[cell_a, cell_b] = (sim_store["cvr_lift"][a] > sim_store["cvr_lift"][b]).mean()
+                            pairwise.loc[cell_a, cell_b] = (
+                                sim_store["relative_cvr_lift"][a] > sim_store["relative_cvr_lift"][b]
+                            ).mean()
 
             overlap_rows = []
             for a, cell_a in enumerate(cells):
@@ -192,7 +201,9 @@ def run_incrementality_simulation(
                         "cell_b": cell_b,
                         "p_a_beats_b_incremental": (sim_store["incremental"][a] > sim_store["incremental"][b]).mean(),
                         "p_a_beats_b_cpis": (sim_store["cpis"][a] < sim_store["cpis"][b]).mean(),
-                        "p_a_beats_b_cvr": (sim_store["cvr_lift"][a] > sim_store["cvr_lift"][b]).mean(),
+                        "p_a_beats_b_cvr": (
+                            sim_store["relative_cvr_lift"][a] > sim_store["relative_cvr_lift"][b]
+                        ).mean(),
                     })
             pairwise_by_metric[metric] = pairwise
             overlap_by_metric[metric] = pd.DataFrame(overlap_rows)
@@ -211,33 +222,3 @@ def run_incrementality_simulation(
         samples_df["cpis_samples"] = samples_df["spend"] / samples_df["incremental_conversion_samples"]
 
     return win_prob_df, samples_df, pairwise_by_metric, overlap_by_metric
-
-
-def run_sensitivity_analysis(
-    results: pd.DataFrame,
-    n_sims: int,
-    winning_rule: str,
-    thresholds: Optional[List[float]] = None,
-) -> pd.DataFrame:
-    if thresholds is None:
-        thresholds = [0.50, 0.60, 0.70, 0.80, 0.90, 0.95]
-
-    rows = []
-    for threshold in thresholds:
-        win_prob_df, _, _, _ = run_incrementality_simulation(
-            results, n_sims=n_sims, significance_threshold=threshold, winning_rule=winning_rule
-        )
-        for metric in win_prob_df["metric"].unique():
-            sub = win_prob_df[win_prob_df["metric"] == metric]
-            if sub.empty:
-                continue
-            winner_row = sub.loc[sub["win_prob"].idxmax()]
-            eligible_count = sub["significance_eligible"].sum()
-            rows.append({
-                "metric": metric,
-                "significance_threshold": threshold,
-                "winner": winner_row["cell"],
-                "winning_probability": winner_row["win_prob"],
-                "eligible_cells": int(eligible_count),
-            })
-    return pd.DataFrame(rows)

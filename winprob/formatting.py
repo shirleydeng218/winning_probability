@@ -15,6 +15,8 @@ LABEL_RELATIVE_CVR_LIFT = "Relative CVR Lift"
 LABEL_INCREMENTAL_CONVERSIONS = "Incremental Conversions"
 LABEL_CPIS = "CPiS"
 LABEL_CPS = "CPS"
+LABEL_BUDGET = "Budget"
+LABEL_TEST_CONVERSIONS = "Test Conversions"
 LABEL_ELIGIBLE_TO_WIN = "Eligible to Win"
 
 
@@ -80,10 +82,14 @@ def fmt_threshold(value: Any, na: str = "N/A") -> str:
 
 def format_per_cell_metrics(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    if LABEL_ABSOLUTE_CVR_LIFT in out.columns:
-        out[LABEL_ABSOLUTE_CVR_LIFT] = out[LABEL_ABSOLUTE_CVR_LIFT].apply(fmt_cvr_lift)
     if LABEL_RELATIVE_CVR_LIFT in out.columns:
         out[LABEL_RELATIVE_CVR_LIFT] = out[LABEL_RELATIVE_CVR_LIFT].apply(fmt_relative_cvr_lift)
+    if LABEL_ABSOLUTE_CVR_LIFT in out.columns:
+        out[LABEL_ABSOLUTE_CVR_LIFT] = out[LABEL_ABSOLUTE_CVR_LIFT].apply(fmt_cvr_lift)
+    if LABEL_BUDGET in out.columns:
+        out[LABEL_BUDGET] = out[LABEL_BUDGET].apply(fmt_currency)
+    if LABEL_TEST_CONVERSIONS in out.columns:
+        out[LABEL_TEST_CONVERSIONS] = out[LABEL_TEST_CONVERSIONS].apply(fmt_count)
     if LABEL_INCREMENTAL_CONVERSIONS in out.columns:
         out[LABEL_INCREMENTAL_CONVERSIONS] = out[LABEL_INCREMENTAL_CONVERSIONS].apply(fmt_count)
     if LABEL_CPIS in out.columns:
@@ -99,6 +105,8 @@ def format_winning_probability_summary(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if LABEL_WINNING_PROBABILITY in out.columns:
         out[LABEL_WINNING_PROBABILITY] = out[LABEL_WINNING_PROBABILITY].apply(fmt_winning_probability)
+    if LABEL_RELATIVE_CVR_LIFT in out.columns:
+        out[LABEL_RELATIVE_CVR_LIFT] = out[LABEL_RELATIVE_CVR_LIFT].apply(fmt_relative_cvr_lift)
     if LABEL_ABSOLUTE_CVR_LIFT in out.columns:
         out[LABEL_ABSOLUTE_CVR_LIFT] = out[LABEL_ABSOLUTE_CVR_LIFT].apply(fmt_cvr_lift)
     if LABEL_INCREMENTAL_CONVERSIONS in out.columns:
@@ -129,13 +137,10 @@ def format_rankings_table(df: pd.DataFrame) -> pd.DataFrame:
     for col in (
         LABEL_WINNING_PROBABILITY,
         LABEL_SIGNIFICANCE,
-        LABEL_ABSOLUTE_CVR_LIFT,
         LABEL_RELATIVE_CVR_LIFT,
     ):
         if col in out.columns:
-            if col == LABEL_ABSOLUTE_CVR_LIFT:
-                out[col] = out[col].apply(fmt_cvr_lift)
-            elif col == LABEL_RELATIVE_CVR_LIFT:
+            if col == LABEL_RELATIVE_CVR_LIFT:
                 out[col] = out[col].apply(fmt_relative_cvr_lift)
             elif col == LABEL_SIGNIFICANCE:
                 out[col] = out[col].apply(fmt_significance)
@@ -153,10 +158,10 @@ def format_budget_optimizer(df: pd.DataFrame) -> pd.DataFrame:
     currency_cols = [
         "Current Spend",
         "Current CPiS",
-        "Projected Incremental from Added Budget",
     ]
     count_cols = [
         "Current Incremental Conversions",
+        "Projected Incremental from Added Budget",
         "Projected Total Incremental Conversions",
     ]
     for col in currency_cols:
@@ -170,24 +175,36 @@ def format_budget_optimizer(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def format_sensitivity_table(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    renames = {
-        "significance_threshold": "Significance Threshold",
-        "winning_probability": LABEL_WINNING_PROBABILITY,
-        "winner": "Recommended Winner",
-        "eligible_cells": "Eligible Cells",
-    }
-    out = out.rename(columns={k: v for k, v in renames.items() if k in out.columns})
-    if "Significance Threshold" in out.columns:
-        out["Significance Threshold"] = out["Significance Threshold"].apply(fmt_threshold)
-    if LABEL_WINNING_PROBABILITY in out.columns:
-        out[LABEL_WINNING_PROBABILITY] = out[LABEL_WINNING_PROBABILITY].apply(fmt_winning_probability)
-    if "Eligible Cells" in out.columns:
-        out["Eligible Cells"] = out["Eligible Cells"].apply(
-            lambda x: fmt_count(x) if not _is_missing(x) else "N/A"
-        )
-    return out
+BUDGET_OPTIMIZER_PROJECTED_COLS = (
+    "Projected Incremental from Added Budget",
+    "Projected Total Incremental Conversions",
+)
+
+
+def style_budget_optimizer_table(df: pd.DataFrame):
+    """Highlight projected columns so current vs. simulated values are easy to scan."""
+    display = format_budget_optimizer(df)
+    projected = set(BUDGET_OPTIMIZER_PROJECTED_COLS)
+
+    def _highlight_projected_columns(col):
+        if col.name in projected:
+            return [
+                "background-color: rgba(126, 217, 87, 0.22); font-weight: 600"
+                for _ in col
+            ]
+        return [""] * len(col)
+
+    styler = display.style.apply(_highlight_projected_columns, axis=0)
+    styler.set_table_styles([
+        {
+            "selector": "thead th",
+            "props": [
+                ("background-color", "#12263A"),
+                ("color", "#E6F2F0"),
+            ],
+        },
+    ])
+    return styler
 
 
 def format_overlap_table(df: pd.DataFrame) -> pd.DataFrame:
