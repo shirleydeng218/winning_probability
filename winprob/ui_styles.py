@@ -35,10 +35,17 @@ def inject_app_styles() -> None:
     st.markdown(
         f"""
         <style>
-        html {{ scroll-behavior: smooth; }}
+        html {{ scroll-behavior: smooth; scroll-padding-top: 5rem; }}
 
+        .main .block-container {{
+            padding-top: 2.75rem;
+            padding-bottom: 2rem;
+            max-width: 1200px;
+        }}
+
+        /* Legacy selector fallback for older Streamlit layouts */
         .block-container {{
-            padding-top: 1.5rem;
+            padding-top: 2.75rem;
             padding-bottom: 2rem;
             max-width: 1200px;
         }}
@@ -262,8 +269,11 @@ def inject_app_styles() -> None:
             border: 1px solid {BORDER};
             border-radius: 16px;
             padding: 1.1rem 1.25rem;
+            margin-top: 0.5rem;
             margin-bottom: 1.25rem;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+            position: relative;
+            z-index: 1;
         }}
         .winprob-header-grid {{
             display: grid;
@@ -488,9 +498,9 @@ def render_app_header(
                     <img src="{disney_uri}" alt="Disney" />
                 </div>
                 <div class="winprob-header-center">
-                    <div class="winprob-header-eyebrow">BLADE · BAYESIAN TEST INTELLIGENCE</div>
+                    <div class="winprob-header-eyebrow">BLADE</div>
                     <div class="winprob-header-main">Marketing Analytics</div>
-                    <div class="winprob-header-sub">WinProb · quantify uncertainty · decide with confidence</div>
+                    <div class="winprob-header-sub">BAYESIAN TEST INTELLIGENCE</div>
                 </div>
                 <div class="winprob-header-logo winprob-header-logo-right">
                     <img src="{hulu_uri}" alt="Hulu" />
