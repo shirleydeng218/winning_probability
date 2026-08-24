@@ -141,20 +141,23 @@ def run_incrementality_app():
 
         input_file = st.file_uploader("Upload test data (CSV or Excel)", type=["csv", "xlsx"])
 
+        sample_mode_key = f"{namespace}_sample_mode"
         raw = None
-        test_name = "Untitled Test"
         if use_sample:
+            st.session_state[sample_mode_key] = True
+            st.session_state[f"{namespace}_test_name"] = "Sample Incrementality Test"
             raw = get_sample_incrementality_df()
-            test_name = "Sample Incrementality Test"
-            st.session_state[f"{namespace}_test_name"] = test_name
         elif input_file is not None:
-            test_name = input_file.name.rsplit(".", 1)[0]
-            st.session_state[f"{namespace}_test_name"] = test_name
+            st.session_state[sample_mode_key] = False
+            st.session_state[f"{namespace}_test_name"] = input_file.name.rsplit(".", 1)[0]
             if input_file.name.endswith(".xlsx"):
                 raw = pd.read_excel(input_file)
             else:
                 raw = pd.read_csv(input_file)
+        elif st.session_state.get(sample_mode_key):
+            raw = get_sample_incrementality_df()
 
+        validation = None
         if raw is not None:
             validation = validate_incrementality_input(raw)
             section_anchor("input-validation", "Input validation")
@@ -165,14 +168,19 @@ def run_incrementality_app():
 
             if validation["is_valid"]:
                 st.session_state[f"{namespace}_raw"] = validation["cleaned_df"]
-                st.success(f"Validated {validation['row_count']} rows.")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("Next: Configure", type="primary"):
-                        next_step(namespace)
-                        st.rerun()
             else:
-                st.error("Fix validation issues before continuing.")
+                st.session_state.pop(f"{namespace}_raw", None)
+
+        ready_to_configure = st.session_state.get(f"{namespace}_raw") is not None
+        if ready_to_configure and validation is not None and validation["is_valid"]:
+            st.success(f"Validated {validation['row_count']} rows.")
+        elif validation is not None and not validation["is_valid"]:
+            st.error("Fix validation issues before continuing.")
+
+        if ready_to_configure:
+            if st.button("Next: Configure", type="primary", key=f"{namespace}_next_configure"):
+                next_step(namespace)
+                st.rerun()
 
         st.markdown(f'<div id="column-reference"></div>', unsafe_allow_html=True)
         with st.expander("Input column glossary"):
