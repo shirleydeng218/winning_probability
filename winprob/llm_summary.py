@@ -325,6 +325,45 @@ def _build_prompt_legacy(context: Dict[str, Any]) -> List[Dict[str, str]]:
     return _build_prompt(context, audience="marketer")
 
 
+def build_manual_prompt_text(context: Dict[str, Any], audience: str = "marketer") -> str:
+    """Build a single copy/paste prompt for external GPT tools."""
+    messages = _build_prompt(context, audience=audience)
+    test_name = context.get("test_name", "Test")
+    return (
+        f"WinProb manual AI summary prompt — {test_name}\n"
+        "Paste everything below into ChatGPT or another approved GPT tool.\n\n"
+        "=== SYSTEM ===\n"
+        f"{messages[0]['content']}\n\n"
+        "=== USER ===\n"
+        f"{messages[1]['content']}\n"
+    )
+
+
+def prepare_manual_summary(
+    pasted_text: str,
+    context: Dict[str, Any],
+    audience: str = "marketer",
+) -> Dict[str, str]:
+    """Normalize a pasted GPT response for in-app display."""
+    summary = pasted_text.strip()
+    if not summary:
+        raise ValueError("Paste a GPT summary before applying.")
+
+    summary = _inject_recommended_winner_section(summary, context)
+    cache_key = hashlib.sha256(
+        json.dumps(
+            {"context": context, "audience": audience, "mode": "manual"},
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    return {
+        "summary": summary,
+        "source": "manual_paste",
+        "cache_key": cache_key,
+    }
+
+
 def build_structured_rule_based_summary(context: Dict[str, Any], talking_points: Optional[Dict[str, List[str]]] = None) -> str:
     sections = [
         "## Recommended Winner",
