@@ -28,7 +28,8 @@ This application evaluates media test performance for Disney+ and Hulu. It suppo
 **incrementality tests** (with a control group) and **split tests** (A/B/C without a control).
 
 For incrementality tests, Winning Probability is based on the lowest simulated **CPiS** among
-cells that meet a minimum **significance threshold** and produce positive incremental conversions.
+cells with positive incremental conversions. **Significance** informs whether the read is
+**Confident** or **Directional** — it does not gate who can win.
 
 **Why this helps when results are uncertain**
 
@@ -49,11 +50,11 @@ recommendation, or acknowledge a close call rather than over-interpreting a nois
 1. **Model uncertainty** — Bayesian Beta posterior for each cell's conversion rate.
 2. **Simulate outcomes** — Monte Carlo draws for CVR, lift, CPiS, and incremental conversions.
 3. **Compare cells** — Rank cells each simulation under your winning rule.
-4. **Winning Probability** — Share of simulations where a cell wins among eligible cells.
+4. **Winning Probability** — Share of simulations where a cell wins under your winning rule.
 
 **Interpretation**
 - Winning Probability near 50% → close call; consider overlap, CPiS, and business constraints.
-- Higher Winning Probability → stronger case to scale, especially when Significance is met.
+- Higher Winning Probability → stronger case to scale; pair with Confident vs Directional significance.
 - Low Winning Probability with good CPiS → efficient but not consistently best across simulations.
 - Always combine with significance, confidence intervals, and business context—not a standalone decision.
 

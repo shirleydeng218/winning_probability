@@ -65,7 +65,7 @@ def clean_incrementality_input(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dic
     - Core metrics (spend, counts): must be provided; not auto-filled.
     - Absolute_lift: derive from conversion rates if missing.
     - CPIS: derive as spend / Absolute_lift when missing.
-    - confidence_level: null → 0 (cell treated as not significant / ineligible).
+    - confidence_level: null → 0 (shown as no significance; does not gate winning probability).
     - Optional columns: left as-is.
     """
     cleaned = df.copy()
@@ -106,7 +106,7 @@ def clean_incrementality_input(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dic
                 "detail": f"Filled {fill_mask.sum()} null value(s) as spend_usd / Absolute_lift",
             })
 
-    # Null significance → 0 (explicitly not eligible to win)
+    # Null significance → 0 (no significance read)
     if "confidence_level" in cleaned.columns:
         missing_conf = cleaned["confidence_level"].isna()
         if missing_conf.any():
@@ -116,7 +116,7 @@ def clean_incrementality_input(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dic
                 "status": "warn",
                 "detail": (
                     f"Filled {missing_conf.sum()} null value(s) with 0 "
-                    "(cell will be ineligible unless threshold is lowered)"
+                    "(shown as no significance)"
                 ),
             })
 

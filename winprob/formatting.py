@@ -17,7 +17,8 @@ LABEL_CPIS = "CPiS"
 LABEL_CPS = "CPS"
 LABEL_BUDGET = "Budget"
 LABEL_TEST_CONVERSIONS = "Test Conversions"
-LABEL_ELIGIBLE_TO_WIN = "Eligible to Win"
+LABEL_CONFIDENCE = "Confidence"
+LABEL_ELIGIBLE_TO_WIN = LABEL_CONFIDENCE  # backward-compatible alias
 
 
 def _is_missing(value: Any) -> bool:
@@ -98,8 +99,11 @@ def format_per_cell_metrics(df: pd.DataFrame) -> pd.DataFrame:
         out[LABEL_CPIS] = out[LABEL_CPIS].apply(fmt_cpis)
     if LABEL_SIGNIFICANCE in out.columns:
         out[LABEL_SIGNIFICANCE] = out[LABEL_SIGNIFICANCE].apply(fmt_significance)
-    if LABEL_ELIGIBLE_TO_WIN in out.columns:
-        out[LABEL_ELIGIBLE_TO_WIN] = out[LABEL_ELIGIBLE_TO_WIN].map({True: "Yes", False: "No"})
+    if LABEL_CONFIDENCE in out.columns:
+        pass
+    elif LABEL_ELIGIBLE_TO_WIN in out.columns and out[LABEL_ELIGIBLE_TO_WIN].dtype == bool:
+        out[LABEL_CONFIDENCE] = out[LABEL_ELIGIBLE_TO_WIN].map({True: "Confident", False: "Directional"})
+        out = out.drop(columns=[LABEL_ELIGIBLE_TO_WIN])
     return out
 
 
@@ -117,8 +121,11 @@ def format_winning_probability_summary(df: pd.DataFrame) -> pd.DataFrame:
         out[LABEL_CPIS] = out[LABEL_CPIS].apply(fmt_cpis)
     if LABEL_SIGNIFICANCE in out.columns:
         out[LABEL_SIGNIFICANCE] = out[LABEL_SIGNIFICANCE].apply(fmt_significance)
-    if LABEL_ELIGIBLE_TO_WIN in out.columns:
-        out[LABEL_ELIGIBLE_TO_WIN] = out[LABEL_ELIGIBLE_TO_WIN].map({True: "Yes", False: "No"})
+    if LABEL_CONFIDENCE in out.columns:
+        pass
+    elif LABEL_ELIGIBLE_TO_WIN in out.columns and out[LABEL_ELIGIBLE_TO_WIN].dtype == bool:
+        out[LABEL_CONFIDENCE] = out[LABEL_ELIGIBLE_TO_WIN].map({True: "Confident", False: "Directional"})
+        out = out.drop(columns=[LABEL_ELIGIBLE_TO_WIN])
     return out
 
 

@@ -25,8 +25,6 @@ RED = "#F87171"
 STATUS_ICONS = {
     "Recommended": "🏆",
     "Runner-up": "🥈",
-    "Leads (not eligible)": "⚠️",
-    "Not eligible": "⛔",
     "Alternative": "📊",
 }
 
@@ -210,6 +208,7 @@ def inject_app_styles() -> None:
             grid-template-columns: repeat(4, 1fr);
             gap: 0.75rem;
             margin: 0.5rem 0 1rem 0;
+            overflow: visible;
         }}
         @media (max-width: 900px) {{
             .winprob-kpi-grid {{ grid-template-columns: repeat(2, 1fr); }}
@@ -220,6 +219,13 @@ def inject_app_styles() -> None:
             border-top: 3px solid {GREEN};
             border-radius: 12px;
             padding: 0.85rem 1rem;
+            position: relative;
+            overflow: visible;
+        }}
+        .winprob-kpi .winprob-term-tip {{
+            position: absolute;
+            top: 0.55rem;
+            right: 0.55rem;
         }}
         .winprob-kpi-label {{
             color: {MUTED};
@@ -353,7 +359,7 @@ def render_quick_start() -> None:
             <div class="winprob-step-card">
                 <div class="winprob-step-num">STEP 2</div>
                 <div class="winprob-step-label">Configure scenario</div>
-                <div class="winprob-step-hint">Pick metrics, winning rule, and significance in the sidebar.</div>
+                <div class="winprob-step-hint">Pick metrics and winning rule in the sidebar.</div>
             </div>
             <div class="winprob-step-card">
                 <div class="winprob-step-num">STEP 3</div>
@@ -412,11 +418,128 @@ def render_callout(message: str, tone: str = "info") -> None:
     )
 
 
+def term_tip_icon_html(definition: str) -> str:
+    """Small info icon with hover/focus popup for glossary definitions."""
+    text = _safe_html(definition)
+    return (
+        f'<span class="winprob-term-tip" tabindex="0" role="button" aria-label="Definition">'
+        f'<svg class="winprob-term-tip-icon" viewBox="0 0 16 16" aria-hidden="true">'
+        f'<circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.25"/>'
+        f'<path d="M8 7.1v3.4M8 5.2h.01" stroke="currentColor" stroke-width="1.35" '
+        f'stroke-linecap="round"/>'
+        f"</svg>"
+        f'<span class="winprob-term-tip-popup">{text}</span>'
+        f"</span>"
+    )
+
+
+def inject_glossary_tooltip_styles() -> None:
+    st.markdown(
+        f"""
+        <style>
+        .winprob-term-tip {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.05rem;
+            height: 1.05rem;
+            color: {MUTED};
+            cursor: help;
+            position: relative;
+            flex-shrink: 0;
+            outline: none;
+        }}
+        .winprob-term-tip-icon {{
+            width: 1.05rem;
+            height: 1.05rem;
+        }}
+        .winprob-term-tip:hover,
+        .winprob-term-tip:focus {{
+            color: {MINT};
+        }}
+        .winprob-term-tip-popup {{
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            width: min(280px, 70vw);
+            padding: 0.55rem 0.65rem;
+            background: {PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 8px;
+            color: {TEXT};
+            font-size: 0.82rem;
+            line-height: 1.45;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: 400;
+            white-space: normal;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 60;
+        }}
+        .winprob-term-tip:hover .winprob-term-tip-popup,
+        .winprob-term-tip:focus .winprob-term-tip-popup,
+        .winprob-term-tip:focus-within .winprob-term-tip-popup {{
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }}
+        .winprob-section-heading {{
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin: 1rem 0 0.35rem 0;
+        }}
+        .winprob-section-heading-text {{
+            color: {TEXT};
+            font-size: 1.5rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }}
+        .winprob-section-heading .winprob-term-tip {{
+            margin-top: 0.2rem;
+        }}
+        .winprob-glossary-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 0.55rem;
+            margin-top: 0.35rem;
+        }}
+        .winprob-glossary-card {{
+            position: relative;
+            background: {PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 10px;
+            padding: 0.65rem 2rem 0.65rem 0.75rem;
+        }}
+        .winprob-glossary-card-term {{
+            color: {MINT};
+            font-size: 0.88rem;
+            word-break: break-word;
+        }}
+        .winprob-glossary-card .winprob-term-tip {{
+            position: absolute;
+            top: 0.55rem;
+            right: 0.55rem;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_kpi_grid(items: List[Dict[str, str]]) -> None:
+    from winprob.glossary import lookup_term_definition
+
     cards = []
     for item in items:
         label = _safe_html(item["label"])
         value = _safe_html(item["value"])
+        definition = lookup_term_definition(item["label"])
+        tip_html = term_tip_icon_html(definition) if definition else ""
         sub_html = (
             f'<div class="winprob-kpi-sub">{_safe_html(item["sub"])}</div>'
             if item.get("sub")
@@ -424,6 +547,7 @@ def render_kpi_grid(items: List[Dict[str, str]]) -> None:
         )
         cards.append(
             f'<div class="winprob-kpi">'
+            f"{tip_html}"
             f'<div class="winprob-kpi-label">{label}</div>'
             f'<div class="winprob-kpi-value">{value}</div>'
             f"{sub_html}"
@@ -438,10 +562,25 @@ def render_section_header(
     *,
     anchor: Optional[str] = None,
     level: str = "subheader",
+    glossary_term: Optional[str] = None,
 ) -> None:
+    from winprob.glossary import lookup_term_definition
+
     if anchor:
         st.markdown(f'<div id="{anchor}"></div>', unsafe_allow_html=True)
-    if level == "header":
+
+    definition = lookup_term_definition(glossary_term or title)
+    if definition and level in ("subheader", "header"):
+        size_class = "winprob-section-heading-text"
+        tip_html = term_tip_icon_html(definition)
+        st.markdown(
+            f'<div class="winprob-section-heading">'
+            f'<div class="{size_class}">{_safe_html(title)}</div>'
+            f"{tip_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    elif level == "header":
         st.header(title)
     elif level == "subheader":
         st.subheader(title)
@@ -464,13 +603,11 @@ def decorate_status_column(df: pd.DataFrame, column: str = "Status") -> pd.DataF
     return out
 
 
-def render_scenario_pills(winning_rule_label: str, significance_threshold: str) -> None:
+def render_scenario_pills(winning_rule_label: str) -> None:
     rule = _safe_html(winning_rule_label)
-    threshold = _safe_html(significance_threshold)
     st.markdown(
         f'<div style="margin-bottom: 0.75rem;">'
         f'<span class="winprob-metric-pill">Scenario: {rule}</span>'
-        f'<span class="winprob-metric-pill">Significance ≥ {threshold}</span>'
         f"</div>",
         unsafe_allow_html=True,
     )

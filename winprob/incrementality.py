@@ -8,13 +8,13 @@ import streamlit as st
 from scipy.stats import norm
 
 from winprob.dashboard import render_test_banner
-from winprob.formatting import fmt_threshold
 from winprob.glossary import (
     CONFIGURE_NAV,
     RESULTS_FULL_ANALYSIS_NAV,
     UPLOAD_NAV,
     inject_navigation_styles,
-    render_sidebar_glossary,
+    render_main_glossary_cards,
+    render_sidebar_nav,
     section_anchor,
 )
 from winprob.llm_summary import build_incrementality_summary_context
@@ -63,7 +63,6 @@ def _standardize_df(raw: pd.DataFrame) -> pd.DataFrame:
 def _render_sidebar_config(
     namespace: str,
     *,
-    glossary_context: str = "configure",
     nav_sections=None,
     full_analysis_nav=None,
     metrics=None,
@@ -76,14 +75,6 @@ def _render_sidebar_config(
             options=list(WINNING_RULES.keys()),
             format_func=lambda k: WINNING_RULES[k],
             key=f"{namespace}_winning_rule",
-        )
-        significance_threshold = st.slider(
-            "Minimum significance to win",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.0,
-            step=0.05,
-            key=f"{namespace}_significance",
         )
         n_sims = st.slider(
             "Simulations",
@@ -101,14 +92,13 @@ def _render_sidebar_config(
             )
         st.caption("Switch scenarios without re-uploading to see how the recommended winner changes.")
 
-    render_sidebar_glossary(
-        context=glossary_context,
+    render_sidebar_nav(
         nav_sections=nav_sections,
         full_analysis_nav=full_analysis_nav,
         metrics=metrics,
         selected_metric=selected_metric,
     )
-    return winning_rule, significance_threshold, n_sims, selected_metric
+    return winning_rule, n_sims, selected_metric
 
 
 def run_incrementality_app():
@@ -121,8 +111,8 @@ def run_incrementality_app():
 
     # ---- Step 1: Upload & Validate ----
     if step == 0:
-        winning_rule, significance_threshold, n_sims, _ = _render_sidebar_config(
-            namespace, glossary_context="upload", nav_sections=UPLOAD_NAV
+        winning_rule, n_sims, _ = _render_sidebar_config(
+            namespace, nav_sections=UPLOAD_NAV
         )
         section_anchor("upload-validate", "Upload & Validate")
         col_a, col_b = st.columns(2)
@@ -185,25 +175,19 @@ def run_incrementality_app():
 
         st.markdown(f'<div id="column-reference"></div>', unsafe_allow_html=True)
         with st.expander("Input column glossary"):
+            st.caption("Hover the ⓘ icon on any term for its definition.")
+            render_main_glossary_cards("upload")
             st.markdown(
                 """
-                **Required (must be populated per row):**
-                - `spend_usd`, `n_control`, `n_test`, `test_conversions`, `control_conversions`
-
-                **Required columns — nulls handled automatically when possible:**
-                - `Absolute_lift` — derived from `test_conv_rate` − `control_conv_rate` × `n_test` if blank
-                - `CPIS` — derived as `spend_usd / Absolute_lift` if blank
-                - `confidence_level` — null → `0` (cell ineligible unless threshold lowered)
-
-                **Optional:** `relative_lift`, `test_conv_rate`, `control_conv_rate`, CI columns
+                **Optional columns:** `relative_lift`, `test_conv_rate`, `control_conv_rate`, CI columns
                 """
             )
         return
 
     # ---- Step 2: Configure ----
     if step == 1:
-        winning_rule, significance_threshold, n_sims, _ = _render_sidebar_config(
-            namespace, glossary_context="configure", nav_sections=CONFIGURE_NAV
+        winning_rule, n_sims, _ = _render_sidebar_config(
+            namespace, nav_sections=CONFIGURE_NAV
         )
         section_anchor("configure-analysis", "Configure Analysis")
         raw = st.session_state.get(f"{namespace}_raw")
@@ -229,10 +213,7 @@ def run_incrementality_app():
             total_reach=int(per_cell["n_test"].sum()),
         )
 
-        render_scenario_pills(
-            WINNING_RULES[winning_rule],
-            fmt_threshold(significance_threshold),
-        )
+        render_scenario_pills(WINNING_RULES[winning_rule])
         st.caption(f"**{n_sims:,}** Monte Carlo simulations will run on the selected metrics.")
 
         c1, c2, c3 = st.columns(3)
@@ -258,9 +239,8 @@ def run_incrementality_app():
     df = df[df["conversion_segment"].isin(conversion_metrics)]
     test_name = st.session_state.get(f"{namespace}_test_name", "Test")
 
-    winning_rule, significance_threshold, n_sims, selected_metric = _render_sidebar_config(
+    winning_rule, n_sims, selected_metric = _render_sidebar_config(
         namespace,
-        glossary_context="results",
         full_analysis_nav=RESULTS_FULL_ANALYSIS_NAV,
         metrics=sorted(conversion_metrics),
     )
@@ -283,18 +263,15 @@ def run_incrementality_app():
     metrics_df = df[useful_columns]
 
     results = build_posterior_results(metrics_df)
-    results["significance_eligible"] = results["conf_level"] >= significance_threshold
 
     win_prob_df, samples_df, pairwise_by_metric, overlap_by_metric = run_incrementality_simulation(
         results,
         n_sims=n_sims,
-        significance_threshold=significance_threshold,
         winning_rule=winning_rule,
     )
 
     summary_context = build_incrementality_summary_context(
         test_name=test_name,
-        significance_threshold=significance_threshold,
         results_df=results,
         win_prob_df=win_prob_df,
         samples_df=samples_df,
@@ -305,9 +282,7 @@ def run_incrementality_app():
     talking_points = {}
     for metric in win_prob_df["metric"].unique():
         talking_points.update(
-            generate_talking_points(
-                win_prob_df, metric, significance_threshold, winning_rule=winning_rule
-            )
+            generate_talking_points(win_prob_df, metric, winning_rule=winning_rule)
         )
 
     render_incrementality_results(
@@ -318,7 +293,6 @@ def run_incrementality_app():
         samples_df=samples_df,
         pairwise_by_metric=pairwise_by_metric,
         overlap_by_metric=overlap_by_metric,
-        significance_threshold=significance_threshold,
         winning_rule=winning_rule,
         n_sims=n_sims,
         selected_metric=selected_metric or sorted(conversion_metrics)[0],

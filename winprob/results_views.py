@@ -21,20 +21,20 @@ from winprob.formatting import (
     LABEL_ABSOLUTE_CVR_LIFT,
     LABEL_BUDGET,
     LABEL_CPIS,
-    LABEL_ELIGIBLE_TO_WIN,
+    LABEL_CONFIDENCE,
     LABEL_INCREMENTAL_CONVERSIONS,
     LABEL_RELATIVE_CVR_LIFT,
     LABEL_SIGNIFICANCE,
     LABEL_TEST_CONVERSIONS,
     LABEL_WINNING_PROBABILITY,
-    fmt_threshold,
     format_budget_optimizer,
     format_overlap_table,
     format_per_cell_metrics,
     format_winning_probability_summary,
     style_budget_optimizer_table,
 )
-from winprob.glossary import metric_anchor, section_anchor, slugify
+from winprob.confidence import confidence_read
+from winprob.glossary import metric_anchor, render_glossary_dataframe, section_anchor, slugify
 from winprob.plotting import cache_and_download_figure, cache_csv, render_incrementality_density_grid
 from winprob.simulation import WINNING_RULES
 from winprob.ui import get_applied_ai_summary_for_export
@@ -44,7 +44,7 @@ from winprob.ui_styles import render_callout
 def _build_summary_views(win_prob_df):
     summary_table = win_prob_df[[
         "dt", "cell", "metric", "win_prob", "relative_cvr_lift", "cvr_lift",
-        "incremental_conversions", "cpis", "conf_level", "significance_eligible",
+        "incremental_conversions", "cpis", "conf_level", "confidence_read",
     ]].rename(columns={
         "win_prob": LABEL_WINNING_PROBABILITY,
         "cpis": LABEL_CPIS,
@@ -53,7 +53,7 @@ def _build_summary_views(win_prob_df):
         "cvr_lift": LABEL_ABSOLUTE_CVR_LIFT,
         "incremental_conversions": LABEL_INCREMENTAL_CONVERSIONS,
         "conf_level": LABEL_SIGNIFICANCE,
-        "significance_eligible": LABEL_ELIGIBLE_TO_WIN,
+        "confidence_read": LABEL_CONFIDENCE,
     })
     to_view = summary_table.drop(columns=["dt"]).copy()
     return summary_table, to_view
@@ -65,9 +65,12 @@ def _render_per_cell_table(results, metric: str) -> None:
         "Per-Cell Performance Metrics",
         caption="Observed spend, conversions, lift, CPiS, and Significance for this conversion metric.",
     )
-    per_cell_display = results[results["metric"] == metric][[
+    per_cell = results[results["metric"] == metric].copy()
+    if "confidence_read" not in per_cell.columns:
+        per_cell["confidence_read"] = per_cell["conf_level"].apply(confidence_read)
+    per_cell_display = per_cell[[
         "cell", "metric", "spend", "test_conversions", "cvr_lift", "relative_cvr_lift",
-        "incremental_conversions", "cpis", "conf_level", "significance_eligible",
+        "incremental_conversions", "cpis", "conf_level", "confidence_read",
     ]].rename(columns={
         "cell": "Cell",
         "metric": "Metric",
@@ -78,12 +81,12 @@ def _render_per_cell_table(results, metric: str) -> None:
         "incremental_conversions": LABEL_INCREMENTAL_CONVERSIONS,
         "cpis": LABEL_CPIS,
         "conf_level": LABEL_SIGNIFICANCE,
-        "significance_eligible": LABEL_ELIGIBLE_TO_WIN,
+        "confidence_read": LABEL_CONFIDENCE,
     })
     if per_cell_display.empty:
         st.caption("No per-cell rows for this metric.")
         return
-    st.dataframe(format_per_cell_metrics(per_cell_display), use_container_width=True)
+    render_glossary_dataframe(format_per_cell_metrics(per_cell_display), use_container_width=True)
 
 
 def _render_metric_advanced_analysis(
@@ -116,7 +119,7 @@ def _render_metric_advanced_analysis(
                 unsafe_allow_html=True,
             )
             st.caption("How often two cells look statistically similar in simulation.")
-            st.dataframe(format_overlap_table(overlap_by_metric[metric]), use_container_width=True)
+            render_glossary_dataframe(format_overlap_table(overlap_by_metric[metric]), use_container_width=True)
 
     with st.expander("Budget Optimizer", expanded=False):
         st.markdown(
@@ -136,7 +139,7 @@ def _render_metric_advanced_analysis(
         )
         budget_df = compute_budget_optimizer(win_prob_df, metric, added_budget)
         if not budget_df.empty:
-            st.dataframe(style_budget_optimizer_table(budget_df), use_container_width=True)
+            render_glossary_dataframe(style_budget_optimizer_table(budget_df), use_container_width=True)
         elif added_budget <= 0:
             st.caption("Enter an additional budget amount to see projections.")
 
@@ -151,7 +154,6 @@ def _render_metric_results(
     win_prob_df,
     pairwise_by_metric,
     overlap_by_metric,
-    significance_threshold: float,
     winning_rule: str,
     winning_rule_label: str,
 ) -> None:
@@ -166,7 +168,6 @@ def _render_metric_results(
         win_prob_df,
         metric,
         winning_rule_label,
-        significance_threshold,
         winning_rule=winning_rule,
         skip_header=True,
     )
@@ -213,7 +214,6 @@ def _render_export_section(
     df,
     samples_df,
     winning_rule_label: str,
-    significance_threshold: float,
     ai_summary: Optional[str] = None,
 ) -> None:
     section_anchor(
@@ -226,7 +226,6 @@ def _render_export_section(
     readout_charts = build_readout_charts(df, samples_df)
     extra_sections = {
         "Winning Rule": winning_rule_label,
-        "Significance Threshold": fmt_threshold(significance_threshold),
     }
 
     col_html, col_pdf, col_csv = st.columns(3)
@@ -354,7 +353,6 @@ def render_incrementality_results(
     samples_df,
     pairwise_by_metric,
     overlap_by_metric,
-    significance_threshold,
     winning_rule,
     n_sims,
     selected_metric,
@@ -379,7 +377,6 @@ def render_incrementality_results(
         win_prob_df=win_prob_df,
         pairwise_by_metric=pairwise_by_metric,
         overlap_by_metric=overlap_by_metric,
-        significance_threshold=significance_threshold,
         winning_rule=winning_rule,
         winning_rule_label=winning_rule_label,
     )
@@ -396,8 +393,9 @@ def render_incrementality_results(
         "winning-probability-summary",
         "Winning Probability & CPiS by Cell",
         caption="Full results table across all conversion metrics.",
+        glossary_term="Winning Probability",
     )
-    st.dataframe(format_winning_probability_summary(to_view), use_container_width=True)
+    render_glossary_dataframe(format_winning_probability_summary(to_view), use_container_width=True)
 
     render_ai_summary_fn(summary_context, session_namespace="incrementality")
 
@@ -408,6 +406,5 @@ def render_incrementality_results(
         df=df,
         samples_df=samples_df,
         winning_rule_label=winning_rule_label,
-        significance_threshold=significance_threshold,
         ai_summary=get_applied_ai_summary_for_export(summary_context, "incrementality"),
     )

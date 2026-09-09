@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from functools import lru_cache
+from typing import Any, Dict, List, Optional
 
+import pandas as pd
 import streamlit as st
 
 GlossaryTerm = Dict[str, str]
@@ -17,12 +19,106 @@ def slugify(text: str) -> str:
     return re.sub(r"[\s_]+", "-", normalized).strip("-")
 
 
-def section_anchor(anchor: str, title: str, *, level: str = "subheader", caption: Optional[str] = None) -> str:
+def section_anchor(
+    anchor: str,
+    title: str,
+    *,
+    level: str = "subheader",
+    caption: Optional[str] = None,
+    glossary_term: Optional[str] = None,
+) -> str:
     """Render a stable anchor target plus a Streamlit heading."""
     from winprob.ui_styles import render_section_header
 
-    render_section_header(title, caption=caption, anchor=anchor, level=level)
+    render_section_header(
+        title,
+        caption=caption,
+        anchor=anchor,
+        level=level,
+        glossary_term=glossary_term,
+    )
     return anchor
+
+
+def _normalize_term_key(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text).strip().lower())
+
+
+# Display labels and column headers mapped to canonical glossary keys.
+TERM_ALIASES: Dict[str, str] = {
+    "significance": "Significance / Confidence",
+    "confidence": "Confidence",
+    "cpis": "CPiS",
+    "incremental conversions": "Incremental conversions",
+    "absolute cvr lift": "Absolute CVR lift",
+    "relative cvr lift": "Relative CVR lift",
+    "winning probability": "Winning Probability",
+    "simulations": "Simulations",
+    "conversion metrics": "Conversion metrics",
+    "conversion metrics to analyze": "Conversion metrics",
+    "winning rule": "Winning rule",
+    "n_control": "n_control / n_test",
+    "n_test": "n_control / n_test",
+    "test_conversions": "test_conversions / control_conversions",
+    "control_conversions": "test_conversions / control_conversions",
+    "absolute_lift": "Absolute_lift",
+    "event_type": "event_type",
+}
+
+
+@lru_cache(maxsize=1)
+def get_term_lookup() -> Dict[str, str]:
+    lookup: Dict[str, str] = {}
+    for terms in GLOSSARY.values():
+        for entry in terms:
+            lookup[_normalize_term_key(entry["term"])] = entry["definition"]
+    for alias, target in TERM_ALIASES.items():
+        target_key = _normalize_term_key(target)
+        if target_key in lookup:
+            lookup[_normalize_term_key(alias)] = lookup[target_key]
+    return lookup
+
+
+def lookup_term_definition(term: str) -> Optional[str]:
+    if not term:
+        return None
+    lookup = get_term_lookup()
+    return lookup.get(_normalize_term_key(term))
+
+
+def render_main_glossary_cards(context: str) -> None:
+    """Render glossary terms on the main page with hover definitions."""
+    from winprob.ui_styles import _safe_html, term_tip_icon_html
+
+    terms = GLOSSARY.get(context, [])
+    if not terms:
+        return
+
+    cards = []
+    for entry in terms:
+        term = _safe_html(entry["term"])
+        cards.append(
+            f'<div class="winprob-glossary-card">'
+            f'<code class="winprob-glossary-card-term">{term}</code>'
+            f"{term_tip_icon_html(entry['definition'])}"
+            f"</div>"
+        )
+    st.markdown(
+        f'<div class="winprob-glossary-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_glossary_dataframe(df: pd.DataFrame, **kwargs: Any) -> None:
+    """Render a dataframe with glossary help tooltips on recognized column headers."""
+    column_config = dict(kwargs.pop("column_config", {}) or {})
+    for col in df.columns:
+        if col in column_config:
+            continue
+        definition = lookup_term_definition(str(col))
+        if definition:
+            column_config[col] = st.column_config.Column(help=definition)
+    st.dataframe(df, column_config=column_config or None, **kwargs)
 
 
 GLOSSARY: Dict[str, List[GlossaryTerm]] = {
@@ -63,7 +159,7 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
         },
         {
             "term": "confidence_level",
-            "definition": "Statistical significance for absolute lift. Null values become 0 (ineligible to win).",
+            "definition": "Statistical significance for absolute lift. Null values become 0 (shown as no significance).",
         },
         {
             "term": "event_type",
@@ -73,11 +169,11 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
     "configure": [
         {
             "term": "Winning rule",
-            "definition": "How the recommended winner is chosen among eligible cells: lowest CPiS, highest incremental conversions, or highest relative CVR lift.",
+            "definition": "How the recommended winner is chosen: lowest CPiS, highest incremental conversions, or highest relative CVR lift.",
         },
         {
-            "term": "Minimum significance",
-            "definition": "Cells below this confidence level are ineligible to win, even if they lead on efficiency or lift.",
+            "term": "Confidence",
+            "definition": "Stakeholder read from significance: Confident (≥90%), Directional (>0% but <90%), or No significance (0%). Does not gate winning probability.",
         },
         {
             "term": "Simulations",
@@ -91,7 +187,7 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
     "results": [
         {
             "term": "Winning Probability",
-            "definition": "Share of simulations where a cell wins under the selected rule among significance-eligible cells.",
+            "definition": "Share of simulations where a cell wins under the selected winning rule.",
         },
         {
             "term": "CPiS",
@@ -110,8 +206,8 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
             "definition": "Estimated additional conversions from treatment vs. control at test scale.",
         },
         {
-            "term": "Significance / eligibility",
-            "definition": "Whether a cell meets the minimum confidence threshold to be considered for winning.",
+            "term": "Significance / Confidence",
+            "definition": "Significance is the statistical confidence level; Confidence is the plain-language read (Confident, Directional, or No significance).",
         },
     ],
     "split_test": [
@@ -236,77 +332,37 @@ def _render_metric_nav_links(*, selected_metric: str) -> None:
         )
 
 
-def _render_glossary_terms(context: str, *, key_suffix: str) -> None:
-    terms = GLOSSARY.get(context, [])
-    if not terms:
-        return
-
-    query = st.text_input(
-        "Search terms",
-        placeholder="Filter glossary…",
-        key=f"glossary_search_{key_suffix}",
-        label_visibility="collapsed",
-    ).strip().lower()
-
-    filtered = [
-        term
-        for term in terms
-        if not query
-        or query in term["term"].lower()
-        or query in term["definition"].lower()
-    ]
-
-    if not filtered:
-        st.caption("No matching terms.")
-        return
-
-    for term in filtered:
-        with st.expander(term["term"], expanded=bool(query)):
-            st.caption(term["definition"])
-
-
-def render_sidebar_glossary(
+def render_sidebar_nav(
     *,
-    context: str,
     nav_sections: Optional[List[NavSection]] = None,
     metrics: Optional[List[str]] = None,
     selected_metric: Optional[str] = None,
     full_analysis_nav: Optional[List[NavSection]] = None,
 ) -> None:
-    """Render compact jump links and optional glossary in the sidebar."""
+    """Render compact jump links in the sidebar."""
     with st.sidebar:
         has_metric_nav = bool(metrics and selected_metric)
         has_full_analysis_nav = bool(full_analysis_nav)
         has_page_nav = bool(nav_sections) and not has_metric_nav
-        has_nav = has_metric_nav or has_full_analysis_nav or has_page_nav
-        has_glossary = bool(GLOSSARY.get(context))
-
-        if not has_nav and not has_glossary:
+        if not (has_metric_nav or has_full_analysis_nav or has_page_nav):
             return
 
         st.markdown("---")
+        st.subheader("On this page")
 
-        if has_nav:
-            st.subheader("On this page")
+        if has_metric_nav:
+            _render_metric_nav_links(selected_metric=selected_metric)
 
-            if has_metric_nav:
-                _render_metric_nav_links(selected_metric=selected_metric)
+        if full_analysis_nav:
+            _render_nav_group("Full Test Summary · all metrics", full_analysis_nav)
 
-            if full_analysis_nav:
-                _render_nav_group("Full Test Summary · all metrics", full_analysis_nav)
-
-            elif nav_sections and not has_metric_nav:
-                _render_nav_group("Sections", nav_sections)
-
-        if has_glossary:
-            if has_nav:
-                st.markdown("")
-            with st.expander("Glossary", expanded=False):
-                _render_glossary_terms(context, key_suffix=context)
+        elif nav_sections and not has_metric_nav:
+            _render_nav_group("Sections", nav_sections)
 
 
 def inject_navigation_styles() -> None:
     """Apply global WinProb styles (includes navigation link styling)."""
-    from winprob.ui_styles import inject_app_styles
+    from winprob.ui_styles import inject_app_styles, inject_glossary_tooltip_styles
 
     inject_app_styles()
+    inject_glossary_tooltip_styles()

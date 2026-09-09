@@ -12,7 +12,7 @@ WINNING_RULES = {
     "highest_cvr_lift": "Highest relative CVR lift (rate)",
 }
 
-DEFAULT_SIGNIFICANCE_THRESHOLD = 0.0
+from winprob.confidence import confidence_read
 
 
 def build_posterior_results(metrics_df: pd.DataFrame, alpha_prior: float = 1.0, beta_prior: float = 1.0) -> pd.DataFrame:
@@ -61,7 +61,10 @@ def build_posterior_results(metrics_df: pd.DataFrame, alpha_prior: float = 1.0, 
                     "incremental_conversions": pdiff,
                 })
                 idx += 1
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out["confidence_read"] = out["conf_level"].apply(confidence_read)
+    return out
 
 
 def _score_samples(
@@ -96,7 +99,6 @@ def _pick_winner(scores: np.ndarray, winning_rule: str) -> int:
 def run_incrementality_simulation(
     results: pd.DataFrame,
     n_sims: int,
-    significance_threshold: float,
     winning_rule: str = "lowest_cpis",
     seed: int = 1234,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
@@ -127,7 +129,8 @@ def run_incrementality_simulation(
                 conf_level = sub_results.loc[i, "conf_level"]
                 spend = sub_results.loc[i, "spend"]
                 pop = sub_results.loc[i, "population_test"]
-                eligible = conf_level >= significance_threshold and conf_level > 0
+                # Winning probability is not gated by a significance threshold.
+                eligible = True
 
                 if conf_level > 0:
                     test = beta(sub_results.loc[i, "test_alpha_posterior"], sub_results.loc[i, "test_beta_posterior"]).rvs(n_sims)
@@ -173,7 +176,7 @@ def run_incrementality_simulation(
 
             sub_results = sub_results.copy()
             sub_results["win_prob"] = wins / n_sims
-            sub_results["significance_eligible"] = sub_results["conf_level"] >= significance_threshold
+            sub_results["confidence_read"] = sub_results["conf_level"].apply(confidence_read)
             win_prob_df = pd.concat([win_prob_df, sub_results], ignore_index=True)
 
             pairwise = pd.DataFrame(index=cells, columns=cells, dtype=float)

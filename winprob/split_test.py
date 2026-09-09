@@ -11,7 +11,6 @@ import streamlit as st
 from scipy.stats import norm
 
 from winprob.dashboard import render_test_banner
-from winprob.glossary import render_sidebar_glossary
 from winprob.formatting import fmt_count, fmt_cps, fmt_cvr_lift, fmt_winning_probability
 from winprob.llm_summary import build_split_summary_context
 from winprob.plotting import apply_dark_axes, cache_and_download_figure
@@ -19,7 +18,6 @@ from winprob.ui import render_ai_summary_section
 
 
 def run_split_test_app():
-    render_sidebar_glossary(context="split_test")
     st.header("Split Test (A/B/C, no control)")
 
     # Functions

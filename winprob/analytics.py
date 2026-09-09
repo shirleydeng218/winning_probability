@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from winprob.confidence import CONFIDENT, DIRECTIONAL, confidence_read
 from winprob.formatting import (
     LABEL_CPIS,
     LABEL_WINNING_PROBABILITY,
@@ -12,7 +13,6 @@ from winprob.formatting import (
     fmt_cpis,
     fmt_relative_cvr_lift,
     fmt_significance,
-    fmt_threshold,
     fmt_winning_probability,
 )
 
@@ -111,7 +111,7 @@ def compute_budget_optimizer(
             "Current Incremental Conversions": inc,
             "Projected Incremental from Added Budget": projected_incremental,
             "Projected Total Incremental Conversions": projected_total_incremental,
-            "Eligible": row.get("significance_eligible", False),
+            "Confidence": row.get("confidence_read", confidence_read(row.get("conf_level"))),
         })
     result = pd.DataFrame(rows)
     if "Projected Total Incremental Conversions" in result.columns:
@@ -130,6 +130,7 @@ def summarize_metric_leader(
 
     winner, runner_up = _leader_and_runner_up(sub, winning_rule)
     best_cpis = sub.loc[sub["cpis"].idxmin()] if sub["cpis"].notna().any() else None
+    conf = confidence_read(winner["conf_level"])
     return {
         "winner_cell": winner["cell"],
         "win_prob": float(winner["win_prob"]),
@@ -137,7 +138,7 @@ def summarize_metric_leader(
         "incremental_conversions": float(winner["incremental_conversions"]),
         "cvr_lift": float(winner["cvr_lift"]),
         "significance": float(winner["conf_level"]),
-        "eligible": bool(winner.get("significance_eligible", False)),
+        "confidence_read": conf,
         "runner_up_cell": runner_up["cell"] if runner_up is not None else None,
         "runner_up_win_prob": float(runner_up["win_prob"]) if runner_up is not None else None,
         "best_cpis_cell": best_cpis["cell"] if best_cpis is not None else None,
@@ -149,23 +150,17 @@ def _cell_status(
     cell: str,
     winner_cell: str,
     runner_up_cell: Optional[str],
-    eligible: bool,
 ) -> str:
-    if cell == winner_cell and eligible:
+    if cell == winner_cell:
         return "Recommended"
-    if cell == winner_cell and not eligible:
-        return "Leads (not eligible)"
     if runner_up_cell and cell == runner_up_cell:
         return "Runner-up"
-    if not eligible:
-        return "Not eligible"
     return "Alternative"
 
 
 def build_metric_bottom_line(
     win_prob_df: pd.DataFrame,
     metric: str,
-    significance_threshold: float,
     winning_rule: str = "lowest_cpis",
 ) -> str:
     leader = summarize_metric_leader(win_prob_df, metric, winning_rule)
@@ -173,28 +168,26 @@ def build_metric_bottom_line(
         return ""
 
     cell = leader["winner_cell"]
-    if leader["eligible"]:
-        return (
-            f"Recommend **{cell}** for {metric}: "
-            f"{fmt_winning_probability(leader['win_prob'])} Winning Probability, "
-            f"{fmt_cpis(leader['cpis'])} CPiS, "
-            f"{fmt_count(leader['incremental_conversions'])} Incremental Conversions "
-            f"({fmt_significance(leader['significance'])} Significance)."
-        )
+    conf = leader["confidence_read"]
+    if conf == CONFIDENT:
+        conf_note = "statistically confident read"
+    elif conf == DIRECTIONAL:
+        conf_note = "directional read — pair with business context"
+    else:
+        conf_note = "limited significance — interpret cautiously"
 
-    runner = leader.get("runner_up_cell")
-    runner_note = f" **{runner}** is the next-best eligible option." if runner else ""
     return (
-        f"**{cell}** leads on Winning Probability ({fmt_winning_probability(leader['win_prob'])}) "
-        f"but is below {fmt_threshold(significance_threshold)} Significance threshold "
-        f"({fmt_significance(leader['significance'])}).{runner_note}"
+        f"Recommend **{cell}** for {metric}: "
+        f"{fmt_winning_probability(leader['win_prob'])} Winning Probability, "
+        f"{fmt_cpis(leader['cpis'])} CPiS, "
+        f"{fmt_count(leader['incremental_conversions'])} Incremental Conversions "
+        f"({fmt_significance(leader['significance'])} Significance — {conf_note})."
     )
 
 
 def generate_talking_points(
     win_prob_df: pd.DataFrame,
     metric: str,
-    significance_threshold: float = 0.0,
     winning_rule: str = "lowest_cpis",
 ) -> Dict[str, List[str]]:
     """One concise takeaway per cell for stakeholder readouts."""
@@ -214,18 +207,12 @@ def generate_talking_points(
         cpis = float(row["cpis"])
         inc = float(row["incremental_conversions"])
         lift = float(row["relative_cvr_lift"])
-        conf = float(row["conf_level"])
-        eligible = bool(row.get("significance_eligible", False))
+        conf = confidence_read(row.get("conf_level"))
 
-        if cell == winner_cell and eligible:
+        if cell == winner_cell:
             takeaway = (
                 f"Recommended — {fmt_winning_probability(win_prob)} Winning Probability, "
                 f"{fmt_cpis(cpis)} CPiS, {fmt_count(inc)} Incremental Conversions."
-            )
-        elif cell == winner_cell and not eligible:
-            takeaway = (
-                f"Leads Winning Probability ({fmt_winning_probability(win_prob)}) but below "
-                f"{fmt_threshold(significance_threshold)} Significance ({fmt_significance(conf)})."
             )
         elif cell == runner_up_cell:
             takeaway = f"Runner-up — {fmt_winning_probability(win_prob)} Winning Probability, {fmt_cpis(cpis)} CPiS."
@@ -240,8 +227,12 @@ def generate_talking_points(
             )
 
         bullets = [takeaway]
-        if not eligible and cell != winner_cell:
-            bullets.append(f"Below {fmt_threshold(significance_threshold)} Significance ({fmt_significance(conf)}).")
+        if conf == DIRECTIONAL:
+            bullets.append(
+                f"Directional significance ({fmt_significance(row.get('conf_level'))}) — not yet a confident read."
+            )
+        elif conf != CONFIDENT and cell == winner_cell:
+            bullets.append("Limited significance — treat as directional only.")
 
         points[cell] = bullets[:2]
 
@@ -251,7 +242,6 @@ def generate_talking_points(
 def build_stakeholder_summary_table(
     win_prob_df: pd.DataFrame,
     metric: str,
-    significance_threshold: float = 0.0,
     winning_rule: str = "lowest_cpis",
 ) -> pd.DataFrame:
     sub = win_prob_df[win_prob_df["metric"] == metric].copy()
@@ -262,21 +252,15 @@ def build_stakeholder_summary_table(
     leader = summarize_metric_leader(win_prob_df, metric, winning_rule)
     winner_cell = leader.get("winner_cell")
     runner_up_cell = leader.get("runner_up_cell")
-    points = generate_talking_points(
-        win_prob_df, metric, significance_threshold, winning_rule=winning_rule
-    )
+    points = generate_talking_points(win_prob_df, metric, winning_rule=winning_rule)
 
     rows = []
     for _, row in ranked.iterrows():
         cell = row["cell"]
         rows.append({
             "Cell": cell,
-            "Status": _cell_status(
-                cell,
-                winner_cell,
-                runner_up_cell,
-                bool(row.get("significance_eligible", False)),
-            ),
+            "Status": _cell_status(cell, winner_cell, runner_up_cell),
+            "Confidence": confidence_read(row.get("conf_level")),
             LABEL_WINNING_PROBABILITY: row["win_prob"],
             LABEL_CPIS: row["cpis"],
             "Takeaway": points.get(cell, [""])[0],

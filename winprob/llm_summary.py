@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 import requests
 
-from winprob.formatting import fmt_cpis, fmt_cps, fmt_significance, fmt_threshold, fmt_winning_probability
+from winprob.confidence import CONFIDENCE_THRESHOLD, confidence_read
+from winprob.formatting import fmt_cpis, fmt_cps, fmt_significance, fmt_winning_probability
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -34,7 +35,6 @@ def _quantile_summary(series: pd.Series) -> Dict[str, Optional[float]]:
 
 def build_incrementality_summary_context(
     test_name: str,
-    significance_threshold: float,
     results_df: pd.DataFrame,
     win_prob_df: pd.DataFrame,
     samples_df: pd.DataFrame,
@@ -75,7 +75,7 @@ def build_incrementality_summary_context(
                 "relative_cvr_lift": _safe_float(row.get('relative_cvr_lift')),
                 "incremental_conversions": _safe_float(row.get('incremental_conversions')),
                 "significance": _safe_float(row.get('conf_level')),
-                "eligible_to_win": bool(row.get('significance_eligible')),
+                "confidence_read": row.get('confidence_read') or confidence_read(row.get('conf_level')),
                 "confidence_interval": ci_payload,
                 "density_summary": {
                     "absolute_cvr_lift": _quantile_summary(cell_samples.get('cvr_lift_samples', pd.Series(dtype=float))),
@@ -87,7 +87,6 @@ def build_incrementality_summary_context(
         winner = max(cells, key=lambda cell: cell.get('winning_probability') or 0.0)
         metrics.append({
             "metric": metric,
-            "significance_threshold": significance_threshold,
             "cells": cells,
             "top_winner_by_winning_probability": winner["cell"],
         })
@@ -97,10 +96,10 @@ def build_incrementality_summary_context(
         "test_name": test_name,
         "methodology": {
             "winning_probability_rule": (
-                "Lowest simulated CPiS among cells that meet the significance threshold "
-                "and produce positive incremental conversions"
+                "Lowest simulated CPiS among cells with positive incremental conversions "
+                "(significance informs Confident vs Directional read, not eligibility)"
             ),
-            "significance_threshold": significance_threshold,
+            "confidence_threshold_for_read": CONFIDENCE_THRESHOLD,
         },
         "metrics": metrics,
     }
@@ -192,8 +191,9 @@ def _format_metric_winner_block(metric_block: Dict[str, Any], *, test_type: str)
         sig = winner_data.get("significance")
         if sig is not None:
             lines.append(f"- **Significance:** {fmt_significance(sig)}")
-        eligible = winner_data.get("eligible_to_win")
-        lines.append(f"- **Eligible to win:** {'Yes' if eligible else 'No'}")
+        conf = winner_data.get("confidence_read")
+        if conf:
+            lines.append(f"- **Confidence:** {conf}")
     else:
         cps = winner_data.get("cps_usd")
         if cps is not None:
@@ -237,20 +237,6 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
         lines.append(f"**{metric_name}**")
         lines.append(f"- Recommended winner by Winning Probability: **{winner}**")
 
-        if context.get("test_type") == "incrementality":
-            threshold = metric_block.get("significance_threshold")
-            ineligible = [
-                cell["cell"]
-                for cell in metric_block.get("cells", [])
-                if not cell.get("eligible_to_win")
-            ]
-            if threshold is not None:
-                lines.append(f"- Significance threshold: **{fmt_threshold(threshold)}**")
-            if ineligible:
-                lines.append(
-                    f"- Ineligible cells due to significance: {', '.join(ineligible)}"
-                )
-
         for cell in sorted(
             metric_block.get("cells", []),
             key=lambda item: item.get("winning_probability") or 0.0,
@@ -261,10 +247,11 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
             if context.get("test_type") == "incrementality":
                 cpis = cell.get("cpis_usd")
                 cpis_text = fmt_cpis(cpis) if cpis is not None else "N/A"
+                conf = cell.get("confidence_read") or confidence_read(cell.get("significance"))
                 lines.append(
                     f"- {cell['cell']}: Winning Probability {win_prob_text}, "
                     f"CPiS {cpis_text}, Significance "
-                    f"{fmt_significance(cell.get('significance') or 0)}"
+                    f"{fmt_significance(cell.get('significance') or 0)} ({conf})"
                 )
             else:
                 cps = cell.get("cps_usd")
@@ -286,7 +273,7 @@ def build_rule_based_summary(context: Dict[str, Any]) -> str:
 
 def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[Dict[str, str]]:
     if audience == "analyst":
-        tone = "Use precise statistical language, cite uncertainty, and reference posterior overlap and eligibility rules."
+        tone = "Use precise statistical language, cite uncertainty, and reference posterior overlap and confidence framing."
     else:
         tone = "Use plain language for marketing stakeholders. Avoid jargon where possible."
 
@@ -294,7 +281,7 @@ def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[D
         "You are a media test analytics assistant for Disney and Hulu incrementality/split tests. "
         f"{tone} "
         "Use only the provided JSON. Do not invent metrics. "
-        "If no cell is eligible or winning probability is split, say so clearly."
+        "If winning probability is split or significance is directional only, say so clearly."
     )
     user_prompt = (
         "Summarize this media test analysis.\n\n"
@@ -306,7 +293,7 @@ def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[D
         "- **Winning Probability:** {value}\n"
         "- **CPiS:** {value} (incrementality) or **CPS:** {value} (split test)\n"
         "- **Significance:** {value} (incrementality only)\n"
-        "- **Eligible to win:** Yes/No (incrementality only))\n"
+        "- **Confidence:** Confident / Directional / No significance (incrementality only))\n"
         "## Why This Cell Won\n"
         "## Efficiency and Impact\n"
         "## Significance and Caveats\n"

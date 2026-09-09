@@ -17,9 +17,10 @@ from winprob.formatting import (
     fmt_cpis,
     fmt_currency,
     fmt_significance,
-    fmt_threshold,
     fmt_winning_probability,
 )
+from winprob.confidence import confidence_callout_tone
+from winprob.glossary import render_glossary_dataframe
 from winprob.ui_styles import (
     _safe_html,
     decorate_status_column,
@@ -50,7 +51,6 @@ def render_executive_dashboard(
     win_prob_df,
     metric: str,
     winning_rule_label: str,
-    significance_threshold: float,
     winning_rule: str = "lowest_cpis",
     ai_one_liner: Optional[str] = None,
     skip_header: bool = False,
@@ -67,13 +67,11 @@ def render_executive_dashboard(
             level="subheader",
         )
 
-    bottom_line = build_metric_bottom_line(
-        win_prob_df, metric, significance_threshold, winning_rule=winning_rule
-    )
+    bottom_line = build_metric_bottom_line(win_prob_df, metric, winning_rule=winning_rule)
     if ai_one_liner:
         render_callout(ai_one_liner, tone="info")
     elif bottom_line:
-        render_callout(bottom_line, tone="success" if leader["eligible"] else "warning")
+        render_callout(bottom_line, tone=confidence_callout_tone(leader["confidence_read"]))
 
     render_kpi_grid([
         {"label": "Recommended Winner", "value": leader["winner_cell"]},
@@ -82,23 +80,21 @@ def render_executive_dashboard(
         {
             "label": "Significance",
             "value": fmt_significance(leader["significance"]),
-            "sub": "Eligible" if leader["eligible"] else "Not eligible",
+            "sub": leader["confidence_read"],
         },
     ])
 
     takeaway_table = format_stakeholder_summary(
-        build_stakeholder_summary_table(
-            win_prob_df, metric, significance_threshold, winning_rule=winning_rule
-        )
+        build_stakeholder_summary_table(win_prob_df, metric, winning_rule=winning_rule)
     )
     if not takeaway_table.empty:
-        st.dataframe(
+        render_glossary_dataframe(
             decorate_status_column(takeaway_table),
             use_container_width=True,
             hide_index=True,
         )
 
-    render_scenario_pills(winning_rule_label, fmt_threshold(significance_threshold))
+    render_scenario_pills(winning_rule_label)
 
 
 def render_metric_cards_row(cards: Dict[str, Any]) -> None:
