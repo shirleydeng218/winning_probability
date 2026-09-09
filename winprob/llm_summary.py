@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -157,6 +158,69 @@ def build_split_summary_context(
     }
 
 
+def _winner_cell_details(metric_block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    winner_cell = metric_block.get("top_winner_by_winning_probability")
+    if not winner_cell:
+        return None
+    for cell in metric_block.get("cells", []):
+        if cell.get("cell") == winner_cell:
+            return cell
+    return None
+
+
+def _format_metric_winner_block(metric_block: Dict[str, Any], *, test_type: str) -> str:
+    """One consistent markdown block per conversion metric for Recommended Winner."""
+    metric_name = metric_block.get("metric", "Unknown metric")
+    winner_cell = metric_block.get("top_winner_by_winning_probability", "N/A")
+    winner_data = _winner_cell_details(metric_block)
+
+    lines = [
+        f"**Conversion metric:** `{metric_name}`",
+        f"- **Recommended winner:** {winner_cell}",
+    ]
+    if not winner_data:
+        return "\n".join(lines)
+
+    win_prob = winner_data.get("winning_probability")
+    if win_prob is not None:
+        lines.append(f"- **Winning Probability:** {fmt_winning_probability(win_prob)}")
+
+    if test_type == "incrementality":
+        cpis = winner_data.get("cpis_usd")
+        if cpis is not None:
+            lines.append(f"- **CPiS:** {fmt_cpis(cpis)}")
+        sig = winner_data.get("significance")
+        if sig is not None:
+            lines.append(f"- **Significance:** {fmt_significance(sig)}")
+        eligible = winner_data.get("eligible_to_win")
+        lines.append(f"- **Eligible to win:** {'Yes' if eligible else 'No'}")
+    else:
+        cps = winner_data.get("cps_usd")
+        if cps is not None:
+            lines.append(f"- **CPS:** {fmt_cps(cps)}")
+
+    return "\n".join(lines)
+
+
+def _build_recommended_winner_section(context: Dict[str, Any]) -> str:
+    test_type = context.get("test_type", "incrementality")
+    blocks = [
+        _format_metric_winner_block(metric_block, test_type=test_type)
+        for metric_block in context.get("metrics", [])
+    ]
+    return "\n\n".join(blocks)
+
+
+def _inject_recommended_winner_section(summary: str, context: Dict[str, Any]) -> str:
+    """Normalize Recommended Winner so every conversion metric uses the same layout."""
+    winner_body = _build_recommended_winner_section(context)
+    pattern = r"(## Recommended Winner\s*\n)(.*?)(?=\n## |\Z)"
+    replacement = f"## Recommended Winner\n\n{winner_body}\n"
+    if re.search(pattern, summary, flags=re.DOTALL):
+        return re.sub(pattern, replacement, summary, count=1, flags=re.DOTALL)
+    return f"## Recommended Winner\n\n{winner_body}\n\n{summary}"
+
+
 def build_rule_based_summary(context: Dict[str, Any]) -> str:
     lines = [
         "### AI Summary (rule-based fallback)",
@@ -234,6 +298,13 @@ def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[D
         "Summarize this media test analysis.\n\n"
         "Return markdown with EXACTLY these section headers:\n"
         "## Recommended Winner\n"
+        "(For EACH conversion metric, repeat this block with a blank line between metrics:\n"
+        "**Conversion metric:** `{metric_name}`\n"
+        "- **Recommended winner:** {cell_name}\n"
+        "- **Winning Probability:** {value}\n"
+        "- **CPiS:** {value} (incrementality) or **CPS:** {value} (split test)\n"
+        "- **Significance:** {value} (incrementality only)\n"
+        "- **Eligible to win:** Yes/No (incrementality only))\n"
         "## Why This Cell Won\n"
         "## Efficiency and Impact\n"
         "## Significance and Caveats\n"
@@ -253,16 +324,14 @@ def _build_prompt_legacy(context: Dict[str, Any]) -> List[Dict[str, str]]:
 
 
 def build_structured_rule_based_summary(context: Dict[str, Any], talking_points: Optional[Dict[str, List[str]]] = None) -> str:
-    sections = ["## Recommended Winner", ""]
-    for metric_block in context.get("metrics", []):
-        metric_name = metric_block.get("metric", "Unknown metric")
-        winner = metric_block.get("top_winner_by_winning_probability", "N/A")
-        sections.append(f"**{metric_name}:** {winner}")
-        if talking_points:
-            for cell, bullets in talking_points.items():
-                if bullets:
-                    sections.append(f"- **{cell}:** {bullets[0]}")
-    sections.extend(["", "## Why This Cell Won", build_rule_based_summary(context)])
+    sections = [
+        "## Recommended Winner",
+        "",
+        _build_recommended_winner_section(context),
+        "",
+        "## Why This Cell Won",
+        build_rule_based_summary(context),
+    ]
     return "\n".join(sections)
 
 
@@ -313,6 +382,7 @@ def generate_analysis_summary(
 
     try:
         summary = _call_azure_openai(_build_prompt(context, audience=audience))
+        summary = _inject_recommended_winner_section(summary, context)
         return {
             "summary": summary,
             "source": "azure_openai",
