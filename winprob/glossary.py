@@ -143,8 +143,8 @@ CONFIGURE_NAV: List[NavSection] = [
 
 RESULTS_FULL_ANALYSIS_NAV: List[NavSection] = [
     {"label": "Full results table", "anchor": "winning-probability-summary"},
-    {"label": "Export readout", "anchor": "export-readout-pack"},
     {"label": "AI summary", "anchor": "ai-summary"},
+    {"label": "Export readout", "anchor": "export-readout-pack"},
 ]
 
 METRIC_SECTIONS: List[NavSection] = [

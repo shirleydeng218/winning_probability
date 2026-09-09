@@ -3,6 +3,7 @@
 import json
 import os
 import re
+from typing import Optional
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -31,7 +32,7 @@ def _render_copy_prompt_button(prompt_text: str, *, button_id: str) -> None:
             color: #B8F2E6;
             font-size: 0.95rem;
             cursor: pointer;
-          ">Copy GPT prompt</button>
+          ">Copy summary prompt</button>
           <div id="{button_id}-status" style="color:#7ED957; font-size:0.85rem; margin-top:0.35rem; min-height:1rem;"></div>
         </div>
         <script>
@@ -44,7 +45,7 @@ def _render_copy_prompt_button(prompt_text: str, *, button_id: str) -> None:
               status.textContent = "Copied to clipboard.";
               btn.textContent = "Copied!";
               setTimeout(() => {{
-                btn.textContent = "Copy GPT prompt";
+                btn.textContent = "Copy summary prompt";
                 status.textContent = "";
               }}, 2000);
             }} catch (err) {{
@@ -94,7 +95,7 @@ def _render_summary_source_banner(source: str) -> None:
     if source == "azure_openai":
         st.success("Generated with Azure OpenAI.")
     elif source == "manual_paste":
-        st.success("Showing pasted GPT summary.")
+        st.success("Showing pasted AI summary.")
     elif source == "rule_based_fallback":
         st.warning("LLM call failed. Showing rule-based fallback summary.")
     else:
@@ -128,7 +129,7 @@ def _render_automatic_ai_summary(
     else:
         st.warning(
             "Azure OpenAI is not configured. **Generate AI Summary** will use the "
-            "rule-based fallback, or switch to **Manual** to paste a GPT response."
+            "rule-based fallback, or switch to **Manual** to paste an LLM response."
         )
 
     summary_state_key = f"{session_namespace}_ai_summary"
@@ -174,7 +175,7 @@ def _render_manual_ai_summary(
     cache_key: str,
 ) -> None:
     st.info(
-        "Copy the GPT prompt, run it in ChatGPT (or another approved GPT tool), "
+        "Copy the summary prompt, run it in your preferred LLM tool, "
         "then paste the markdown response below. No Azure API key is required in the app."
     )
 
@@ -182,10 +183,14 @@ def _render_manual_ai_summary(
     _render_copy_prompt_button(prompt_text, button_id=f"{session_namespace}_copy_prompt")
 
     pasted_summary = st.text_area(
-        "Paste GPT response (markdown)",
+        "Paste LLM response (markdown)",
         height=280,
         key=f"{session_namespace}_ai_manual_draft",
-        placeholder="Paste the markdown summary returned by ChatGPT here…",
+        placeholder="Paste the markdown summary returned by your LLM here…",
+        help="Apply the pasted summary to display it here and include it in the readout export below.",
+    )
+    st.caption(
+        "Apply the pasted summary to show it in this section and include it in the readout export pack."
     )
 
     col_apply, col_clear = st.columns([1, 1])
@@ -255,6 +260,24 @@ def _render_stored_summary(
         or stored_mode != mode
     ):
         st.info("Inputs, audience, or generation mode changed. Refresh the summary to update.")
+
+
+def get_applied_ai_summary_for_export(context, session_namespace: str) -> Optional[str]:
+    """Return the active AI summary text when it matches the current analysis context."""
+    cache_key = context_cache_key(context)
+    summary_state_key = f"{session_namespace}_ai_summary"
+    summary_cache_key = f"{session_namespace}_ai_summary_cache_key"
+    audience_cache_key = f"{session_namespace}_ai_audience_cache"
+    current_audience = st.session_state.get(f"{session_namespace}_ai_audience")
+
+    stored_result = st.session_state.get(summary_state_key)
+    if not stored_result:
+        return None
+    if st.session_state.get(summary_cache_key) != cache_key:
+        return None
+    if st.session_state.get(audience_cache_key) != current_audience:
+        return None
+    return stored_result.get("summary")
 
 
 def render_ai_summary_section(context, session_namespace, talking_points=None):

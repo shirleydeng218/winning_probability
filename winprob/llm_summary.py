@@ -326,12 +326,12 @@ def _build_prompt_legacy(context: Dict[str, Any]) -> List[Dict[str, str]]:
 
 
 def build_manual_prompt_text(context: Dict[str, Any], audience: str = "marketer") -> str:
-    """Build a single copy/paste prompt for external GPT tools."""
+    """Build a single copy/paste prompt for external LLM tools."""
     messages = _build_prompt(context, audience=audience)
     test_name = context.get("test_name", "Test")
     return (
         f"WinProb manual AI summary prompt — {test_name}\n"
-        "Paste everything below into ChatGPT or another approved GPT tool.\n\n"
+        "Paste everything below into your preferred LLM tool.\n\n"
         "=== SYSTEM ===\n"
         f"{messages[0]['content']}\n\n"
         "=== USER ===\n"
@@ -344,10 +344,10 @@ def prepare_manual_summary(
     context: Dict[str, Any],
     audience: str = "marketer",
 ) -> Dict[str, str]:
-    """Normalize a pasted GPT response for in-app display."""
+    """Normalize a pasted LLM response for in-app display."""
     summary = pasted_text.strip()
     if not summary:
-        raise ValueError("Paste a GPT summary before applying.")
+        raise ValueError("Paste an AI summary before applying.")
 
     summary = _inject_recommended_winner_section(summary, context)
     cache_key = hashlib.sha256(

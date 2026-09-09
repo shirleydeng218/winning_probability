@@ -81,7 +81,7 @@ def _render_sidebar_config(
             "Minimum significance to win",
             min_value=0.0,
             max_value=1.0,
-            value=0.90,
+            value=0.0,
             step=0.05,
             key=f"{namespace}_significance",
         )

@@ -1,5 +1,7 @@
 """Results rendering for incrementality analysis."""
 
+from typing import Optional
+
 import streamlit as st
 
 from winprob.analytics import (
@@ -35,6 +37,7 @@ from winprob.formatting import (
 from winprob.glossary import metric_anchor, section_anchor, slugify
 from winprob.plotting import cache_and_download_figure, cache_csv, render_incrementality_density_grid
 from winprob.simulation import WINNING_RULES
+from winprob.ui import get_applied_ai_summary_for_export
 from winprob.ui_styles import render_callout
 
 
@@ -211,6 +214,7 @@ def _render_export_section(
     samples_df,
     winning_rule_label: str,
     significance_threshold: float,
+    ai_summary: Optional[str] = None,
 ) -> None:
     section_anchor(
         "export-readout-pack",
@@ -226,9 +230,12 @@ def _render_export_section(
     }
 
     col_html, col_pdf, col_csv = st.columns(3)
+    if ai_summary:
+        st.caption("The applied AI summary will be included in HTML and PDF exports.")
     html_bytes = build_readout_html(
         test_name,
         formatted,
+        ai_summary=ai_summary,
         extra_sections=extra_sections,
         charts=readout_charts,
     )
@@ -245,6 +252,7 @@ def _render_export_section(
             pdf_bytes = build_readout_pdf_bytes(
                 test_name,
                 formatted,
+                ai_summary=ai_summary,
                 extra_sections=extra_sections,
                 charts=readout_charts,
             )
@@ -380,7 +388,7 @@ def render_incrementality_results(
     section_anchor(
         "full-test-summary",
         "Full Test Summary",
-        caption="Results, exports, and AI summary across all conversion metrics in this test.",
+        caption="Results, AI summary, and readout export across all conversion metrics in this test.",
         level="subheader",
     )
 
@@ -391,6 +399,8 @@ def render_incrementality_results(
     )
     st.dataframe(format_winning_probability_summary(to_view), use_container_width=True)
 
+    render_ai_summary_fn(summary_context, session_namespace="incrementality")
+
     _render_export_section(
         test_name=test_name,
         to_view=to_view,
@@ -399,6 +409,5 @@ def render_incrementality_results(
         samples_df=samples_df,
         winning_rule_label=winning_rule_label,
         significance_threshold=significance_threshold,
+        ai_summary=get_applied_ai_summary_for_export(summary_context, "incrementality"),
     )
-
-    render_ai_summary_fn(summary_context, session_namespace="incrementality")

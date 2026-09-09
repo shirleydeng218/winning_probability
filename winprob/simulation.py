@@ -12,7 +12,7 @@ WINNING_RULES = {
     "highest_cvr_lift": "Highest relative CVR lift (rate)",
 }
 
-DEFAULT_SIGNIFICANCE_THRESHOLD = 0.90
+DEFAULT_SIGNIFICANCE_THRESHOLD = 0.0
 
 
 def build_posterior_results(metrics_df: pd.DataFrame, alpha_prior: float = 1.0, beta_prior: float = 1.0) -> pd.DataFrame:

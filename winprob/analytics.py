@@ -194,7 +194,7 @@ def build_metric_bottom_line(
 def generate_talking_points(
     win_prob_df: pd.DataFrame,
     metric: str,
-    significance_threshold: float = 0.90,
+    significance_threshold: float = 0.0,
     winning_rule: str = "lowest_cpis",
 ) -> Dict[str, List[str]]:
     """One concise takeaway per cell for stakeholder readouts."""
@@ -251,7 +251,7 @@ def generate_talking_points(
 def build_stakeholder_summary_table(
     win_prob_df: pd.DataFrame,
     metric: str,
-    significance_threshold: float = 0.90,
+    significance_threshold: float = 0.0,
     winning_rule: str = "lowest_cpis",
 ) -> pd.DataFrame:
     sub = win_prob_df[win_prob_df["metric"] == metric].copy()
