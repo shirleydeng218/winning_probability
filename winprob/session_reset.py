@@ -2,11 +2,21 @@
 
 import streamlit as st
 
+_RESTART_COUNT_KEY = "_winprob_restart_count"
+
+
+def test_type_radio_key() -> str:
+    """Fresh widget key after restart so test type starts unselected."""
+    restart_count = st.session_state.get(_RESTART_COUNT_KEY, 0)
+    return f"winprob_test_type_{restart_count}"
+
 
 def clear_app_session_state() -> None:
     """Clear workflow state, exports, AI summaries, and Streamlit caches."""
+    restart_count = st.session_state.get(_RESTART_COUNT_KEY, 0) + 1
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    st.session_state[_RESTART_COUNT_KEY] = restart_count
     st.cache_data.clear()
     st.cache_resource.clear()
 
