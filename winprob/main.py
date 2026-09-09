@@ -6,6 +6,7 @@ from winprob.config import configure_plot_theme
 from winprob.glossary import inject_navigation_styles, render_sidebar_glossary
 from winprob.incrementality import run_incrementality_app
 from winprob.intro import render_app_intro
+from winprob.session_reset import render_sidebar_restart
 from winprob.split_test import run_split_test_app
 from winprob.ui_styles import render_app_header
 
@@ -13,6 +14,7 @@ from winprob.ui_styles import render_app_header
 def run() -> None:
     configure_plot_theme()
     inject_navigation_styles()
+    render_sidebar_restart()
     render_app_header()
 
     st.title("WinProb: Media Test Evaluator")
@@ -27,6 +29,7 @@ def run() -> None:
         ],
         index=None,
         horizontal=True,
+        key="winprob_test_type",
     )
 
     if test_type is None:

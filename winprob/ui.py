@@ -9,6 +9,21 @@ from winprob.glossary import section_anchor
 from winprob.llm_summary import context_cache_key, generate_analysis_summary
 
 
+def _render_recommended_winner_body(body: str) -> None:
+    """Render each conversion metric block with a visible divider between them."""
+    parts = [part.strip() for part in re.split(r"\n---\n", body.strip()) if part.strip()]
+    if len(parts) <= 1:
+        parts = [
+            part.strip()
+            for part in re.split(r"(?=\*\*Conversion metric:\*\*)", body.strip())
+            if part.strip()
+        ]
+    for index, part in enumerate(parts):
+        if index > 0:
+            st.divider()
+        st.markdown(part)
+
+
 def _render_structured_summary(summary_text: str) -> None:
     sections = re.split(r"\n(?=## )", summary_text)
     for section in sections:
@@ -17,8 +32,12 @@ def _render_structured_summary(summary_text: str) -> None:
             continue
         if section.startswith("## "):
             title, _, body = section.partition("\n")
-            with st.expander(title.replace("## ", ""), expanded=True):
-                st.markdown(body.strip())
+            title = title.replace("## ", "")
+            with st.expander(title, expanded=True):
+                if title == "Recommended Winner":
+                    _render_recommended_winner_body(body.strip())
+                else:
+                    st.markdown(body.strip())
         else:
             st.markdown(section)
 

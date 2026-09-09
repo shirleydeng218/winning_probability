@@ -20,6 +20,7 @@ from winprob.glossary import (
 from winprob.llm_summary import build_incrementality_summary_context
 from winprob.results_views import render_incrementality_results
 from winprob.sample_data import get_input_template_df, get_sample_incrementality_df
+from winprob.session_reset import clear_app_session_state
 from winprob.simulation import (
     WINNING_RULES,
     build_posterior_results,
@@ -328,7 +329,5 @@ def run_incrementality_app():
     )
 
     if st.button("Start over"):
-        for key in list(st.session_state.keys()):
-            if key.startswith(f"{namespace}_"):
-                del st.session_state[key]
+        clear_app_session_state()
         st.rerun()

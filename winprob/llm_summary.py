@@ -208,7 +208,9 @@ def _build_recommended_winner_section(context: Dict[str, Any]) -> str:
         _format_metric_winner_block(metric_block, test_type=test_type)
         for metric_block in context.get("metrics", [])
     ]
-    return "\n\n".join(blocks)
+    if not blocks:
+        return "_No conversion metrics available._"
+    return "\n\n---\n\n".join(blocks)
 
 
 def _inject_recommended_winner_section(summary: str, context: Dict[str, Any]) -> str:
@@ -298,7 +300,7 @@ def _build_prompt(context: Dict[str, Any], audience: str = "marketer") -> List[D
         "Summarize this media test analysis.\n\n"
         "Return markdown with EXACTLY these section headers:\n"
         "## Recommended Winner\n"
-        "(For EACH conversion metric, repeat this block with a blank line between metrics:\n"
+        "(For EACH conversion metric, repeat this block with a horizontal rule (`---`) on its own line between metrics:\n"
         "**Conversion metric:** `{metric_name}`\n"
         "- **Recommended winner:** {cell_name}\n"
         "- **Winning Probability:** {value}\n"
