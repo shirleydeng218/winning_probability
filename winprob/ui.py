@@ -1,9 +1,11 @@
 """Shared Streamlit UI components."""
 
+import json
 import os
 import re
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from winprob.glossary import section_anchor
 from winprob.llm_summary import (
@@ -12,6 +14,47 @@ from winprob.llm_summary import (
     generate_analysis_summary,
     prepare_manual_summary,
 )
+
+
+def _render_copy_prompt_button(prompt_text: str, *, button_id: str) -> None:
+    """Copy prompt text to clipboard without displaying the full content."""
+    payload = json.dumps(prompt_text)
+    components.html(
+        f"""
+        <div>
+          <button id="{button_id}" style="
+            width: 100%;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #2F5175;
+            background: #12263A;
+            color: #B8F2E6;
+            font-size: 0.95rem;
+            cursor: pointer;
+          ">Copy GPT prompt</button>
+          <div id="{button_id}-status" style="color:#7ED957; font-size:0.85rem; margin-top:0.35rem; min-height:1rem;"></div>
+        </div>
+        <script>
+          const text = {payload};
+          const btn = document.getElementById("{button_id}");
+          const status = document.getElementById("{button_id}-status");
+          btn.addEventListener("click", async () => {{
+            try {{
+              await navigator.clipboard.writeText(text);
+              status.textContent = "Copied to clipboard.";
+              btn.textContent = "Copied!";
+              setTimeout(() => {{
+                btn.textContent = "Copy GPT prompt";
+                status.textContent = "";
+              }}, 2000);
+            }} catch (err) {{
+              status.textContent = "Copy failed. Try again in your browser.";
+            }}
+          }});
+        </script>
+        """,
+        height=72,
+    )
 
 
 def _render_recommended_winner_body(body: str) -> None:
@@ -131,28 +174,12 @@ def _render_manual_ai_summary(
     cache_key: str,
 ) -> None:
     st.info(
-        "Copy the prompt below into ChatGPT (or another approved GPT tool), then paste "
-        "the markdown response back here. No Azure API key is required in the app."
+        "Copy the GPT prompt, run it in ChatGPT (or another approved GPT tool), "
+        "then paste the markdown response below. No Azure API key is required in the app."
     )
 
     prompt_text = build_manual_prompt_text(context, audience=audience)
-    test_name = context.get("test_name", "test").replace(" ", "_")
-    st.download_button(
-        "Download GPT prompt (.txt)",
-        data=prompt_text.encode("utf-8"),
-        file_name=f"{test_name}_ai_summary_prompt.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
-
-    with st.expander("Preview prompt", expanded=False):
-        st.text_area(
-            "Prompt to paste into ChatGPT",
-            value=prompt_text,
-            height=320,
-            key=f"{session_namespace}_ai_manual_prompt_preview",
-            label_visibility="collapsed",
-        )
+    _render_copy_prompt_button(prompt_text, button_id=f"{session_namespace}_copy_prompt")
 
     pasted_summary = st.text_area(
         "Paste GPT response (markdown)",
@@ -248,11 +275,7 @@ def render_ai_summary_section(context, session_namespace, talking_points=None):
     summary_mode = st.radio(
         "Summary generation",
         options=["manual", "automatic"],
-        format_func=lambda x: (
-            "Manual — copy prompt to ChatGPT"
-            if x == "manual"
-            else "Automatic — Azure OpenAI (legacy)"
-        ),
+        format_func=lambda x: "Manual" if x == "manual" else "Azure OpenAI (WIP)",
         horizontal=True,
         key=f"{session_namespace}_ai_summary_mode",
         index=0,
