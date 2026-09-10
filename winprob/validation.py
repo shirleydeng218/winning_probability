@@ -5,6 +5,28 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
+REQUIRED_SPLIT_COLUMNS = [
+    "cell_name",
+    "event_type",
+    "spend_usd",
+    "n_test",
+    "test_conversions",
+    "impressions",
+    "CPS",
+]
+
+SPLIT_CORE_NUMERIC_COLUMNS = [
+    "spend_usd",
+    "n_test",
+    "test_conversions",
+    "impressions",
+    "CPS",
+]
+
+SPLIT_OPTIONAL_NUMERIC_COLUMNS = [
+    "test_conv_rate",
+]
+
 REQUIRED_INCREMENTALITY_COLUMNS = [
     "cell_name",
     "event_type",
@@ -205,6 +227,82 @@ def validate_incrementality_input(df: pd.DataFrame) -> Dict[str, Any]:
                     "status": "warn",
                     "detail": f"{zero_conv} cell(s) with zero test conversions",
                 })
+
+    preview = cleaned.head(10).copy() if not cleaned.empty else cleaned
+    return {
+        "is_valid": is_valid,
+        "checks": checks,
+        "preview": preview,
+        "row_count": len(cleaned),
+        "cleaned_df": cleaned,
+    }
+
+
+def clean_split_input(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dict[str, str]]]:
+    cleaned = df.copy()
+    actions: List[Dict[str, str]] = []
+
+    for col in SPLIT_CORE_NUMERIC_COLUMNS + SPLIT_OPTIONAL_NUMERIC_COLUMNS:
+        if col in cleaned.columns:
+            cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
+
+    if {"test_conversions", "n_test"}.issubset(cleaned.columns):
+        if "test_conv_rate" not in cleaned.columns:
+            cleaned["test_conv_rate"] = np.nan
+        missing_rate = cleaned["test_conv_rate"].isna()
+        if missing_rate.any():
+            derived = cleaned["test_conversions"] / cleaned["n_test"].replace(0, np.nan)
+            fill_mask = missing_rate & derived.notna()
+            if fill_mask.any():
+                cleaned.loc[fill_mask, "test_conv_rate"] = derived.loc[fill_mask]
+                actions.append({
+                    "check": "test_conv_rate",
+                    "status": "warn",
+                    "detail": f"Filled {fill_mask.sum()} null value(s) as test_conversions / n_test",
+                })
+
+    return cleaned, actions
+
+
+def validate_split_input(df: pd.DataFrame) -> Dict[str, Any]:
+    checks: List[Dict[str, str]] = []
+    is_valid = True
+
+    missing = [col for col in REQUIRED_SPLIT_COLUMNS if col not in df.columns]
+    if missing:
+        is_valid = False
+        for col in missing:
+            checks.append({"check": f"Column `{col}`", "status": "fail", "detail": "Missing required column"})
+    else:
+        for col in REQUIRED_SPLIT_COLUMNS:
+            checks.append({"check": f"Column `{col}`", "status": "pass", "detail": "Present"})
+
+    cleaned, clean_actions = clean_split_input(df)
+    checks.extend(clean_actions)
+
+    if not missing:
+        for col in SPLIT_CORE_NUMERIC_COLUMNS:
+            null_count = cleaned[col].isna().sum()
+            if null_count:
+                is_valid = False
+                checks.append({
+                    "check": f"Required numeric `{col}`",
+                    "status": "fail",
+                    "detail": f"{null_count} null value(s) in: {_null_row_labels(cleaned, col)}",
+                })
+            else:
+                checks.append({
+                    "check": f"Required numeric `{col}`",
+                    "status": "pass",
+                    "detail": "All rows populated",
+                })
+
+        if (cleaned["n_test"] <= 0).any():
+            checks.append({
+                "check": "Reach (n_test)",
+                "status": "warn",
+                "detail": "One or more cells have zero reach",
+            })
 
     preview = cleaned.head(10).copy() if not cleaned.empty else cleaned
     return {

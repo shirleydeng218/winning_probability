@@ -6,13 +6,12 @@ import base64
 import json
 from pathlib import Path
 
-import streamlit as st
 import streamlit.components.v1 as components
 
 from winprob.guide_content import build_guide_payload
 
-GUIDE_MODE_KEY = "winprob_guide_mode"
-_GUIDE_DOM_VERSION = "9"
+_GUIDE_DOM_VERSION = "19"
+_GUIDE_MINIMIZED_OFFSET = 68
 _BAYES_CAT_PATH = Path(__file__).resolve().parent.parent / "assets" / "bayes-cat.png"
 _GUIDE_DEFAULT_WIDTH = 280
 _GUIDE_MIN_WIDTH = 220
@@ -41,6 +40,53 @@ _GUIDE_STYLES = """
   border-radius: 18px;
   box-shadow: 0 14px 40px rgba(11, 28, 45, 0.45);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  transition: width 0.22s ease, padding 0.22s ease;
+}
+.winprob-guide-minimize-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid #2F5175;
+  border-radius: 999px;
+  background: rgba(18, 38, 58, 0.92);
+  color: #B8F2E6;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.winprob-guide-minimize-btn:hover,
+.winprob-guide-minimize-btn:focus {
+  color: #7ED957;
+  border-color: #7ED957;
+  outline: none;
+}
+#winprob-guide-root.minimized {
+  width: 52px !important;
+  min-width: 52px;
+  padding: 0.65rem 0.3rem 0.45rem;
+  cursor: pointer;
+}
+#winprob-guide-root.minimized .winprob-guide-bubble,
+#winprob-guide-root.minimized .winprob-guide-resize-handle {
+  display: none;
+}
+#winprob-guide-root.minimized .winprob-guide-character-wrap {
+  padding-top: 1.35rem;
+}
+#winprob-guide-root.minimized .winprob-guide-character {
+  width: 38px;
+  max-height: 42px;
+}
+#winprob-guide-root.minimized .winprob-guide-halo {
+  width: 52px;
+  height: 52px;
 }
 .winprob-guide-resize-handle {
   position: absolute;
@@ -156,14 +202,28 @@ _GUIDE_STYLES = """
   35% { transform: translateY(-10px) scale(1.04); }
   70% { transform: translateY(-3px) scale(0.98); }
 }
+body.winprob-guide-active [data-testid="stMain"],
+body.winprob-guide-active section.main {
+  padding-right: var(--winprob-guide-offset, 20rem) !important;
+  padding-left: calc(var(--winprob-guide-offset, 20rem) * 0.12) !important;
+  box-sizing: border-box;
+}
+body.winprob-guide-active [data-testid="stMain"] .block-container,
 body.winprob-guide-active .main .block-container {
-  padding-right: var(--winprob-guide-offset, 20rem);
+  max-width: min(1140px, 100%);
+  margin-left: auto;
+  margin-right: auto;
 }
 @media (max-width: 960px) {
   #winprob-guide-root { display: none !important; }
-  body.winprob-guide-active .main .block-container { padding-right: inherit; }
+  body.winprob-guide-active [data-testid="stMain"],
+  body.winprob-guide-active section.main {
+    padding-right: inherit !important;
+    padding-left: inherit !important;
+  }
 }
 """
+
 
 def _bayes_character_html() -> str:
     encoded = base64.b64encode(_BAYES_CAT_PATH.read_bytes()).decode("ascii")
@@ -174,36 +234,8 @@ def _bayes_character_html() -> str:
     )
 
 
-def _normalize_guide_mode_state() -> None:
-    """Map legacy on/minimal/off values to the boolean toggle."""
-    if GUIDE_MODE_KEY not in st.session_state:
-        st.session_state[GUIDE_MODE_KEY] = True
-        return
-
-    mode = st.session_state[GUIDE_MODE_KEY]
-    if mode in ("on", "minimal"):
-        st.session_state[GUIDE_MODE_KEY] = True
-    elif mode == "off":
-        st.session_state[GUIDE_MODE_KEY] = False
-
-
-def render_guide_sidebar() -> None:
-    """Sidebar controls for the Bayes guide."""
-    _normalize_guide_mode_state()
-    with st.sidebar:
-        st.markdown("---")
-        st.caption("Guide")
-        st.toggle(
-            "Bayes guide",
-            key=GUIDE_MODE_KEY,
-            help="Show Bayes on the right with tips for each section as you scroll.",
-        )
-
-
 def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
     """Inject the fixed guide rail into the parent Streamlit document."""
-    _normalize_guide_mode_state()
-    mode_on = bool(st.session_state.get(GUIDE_MODE_KEY, True))
     payload = build_guide_payload()
     if show_home_tip:
         payload["force_home"] = True
@@ -211,29 +243,28 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
     payload_json = json.dumps(payload).replace("</", "<\\/")
     character_html = json.dumps(_bayes_character_html())
     styles = _GUIDE_STYLES.replace("`", "")
-    dom_version = _GUIDE_DOM_VERSION
-    default_width = _GUIDE_DEFAULT_WIDTH
-    min_width = _GUIDE_MIN_WIDTH
-    max_width = _GUIDE_MAX_WIDTH
 
     components.html(
         f"""
         <script>
         (function () {{
-          const MODE_ON = {json.dumps(mode_on)};
           const PAYLOAD = {payload_json};
           const STYLES = `{styles}`;
           const CHARACTER_HTML = {character_html};
-          const DOM_VERSION = {json.dumps(dom_version)};
-          const DEFAULT_WIDTH = {default_width};
-          const MIN_WIDTH = {min_width};
-          const MAX_WIDTH = {max_width};
+          const DOM_VERSION = {json.dumps(_GUIDE_DOM_VERSION)};
+          const DEFAULT_WIDTH = {_GUIDE_DEFAULT_WIDTH};
+          const MIN_WIDTH = {_GUIDE_MIN_WIDTH};
+          const MAX_WIDTH = {_GUIDE_MAX_WIDTH};
           const WIDTH_STORAGE_KEY = "winprob_guide_width";
-          const doc = window.parent.document;
+          const MINIMIZED_STORAGE_KEY = "winprob_guide_minimized";
+          const MINIMIZED_OFFSET = {_GUIDE_MINIMIZED_OFFSET};
           const win = window.parent;
+          const doc = win.document;
 
           function guideMarkup() {{
             return `
+              <button type="button" class="winprob-guide-minimize-btn" id="winprob-guide-minimize"
+                title="Minimize guide" aria-label="Minimize guide">›</button>
               <div class="winprob-guide-resize-handle" id="winprob-guide-resize" title="Drag to resize">
                 <span class="winprob-guide-resize-grip" aria-hidden="true"></span>
               </div>
@@ -248,121 +279,139 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
             `;
           }}
 
-          function applyGuideWidth(width) {{
-            const clamped = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
-            root.style.width = `${{clamped}}px`;
-            doc.documentElement.style.setProperty("--winprob-guide-offset", `${{clamped + 52}}px`);
-            return clamped;
+          function getRoot() {{
+            return doc.getElementById("winprob-guide-root");
           }}
 
           function loadGuideWidth() {{
             const stored = parseInt(win.localStorage.getItem(WIDTH_STORAGE_KEY) || "", 10);
-            if (stored >= MIN_WIDTH && stored <= MAX_WIDTH) {{
-              return stored;
-            }}
+            if (stored >= MIN_WIDTH && stored <= MAX_WIDTH) return stored;
             return DEFAULT_WIDTH;
           }}
 
-          function setupGuideResize() {{
+          function loadGuideMinimized() {{
+            return win.localStorage.getItem(MINIMIZED_STORAGE_KEY) === "1";
+          }}
+
+          function applyGuideWidth(width) {{
+            const root = getRoot();
+            if (!root) return width;
+            const clamped = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
+            root.style.width = `${{clamped}}px`;
+            const guideRightInset = 22;
+            const guideGap = 16;
+            doc.documentElement.style.setProperty(
+              "--winprob-guide-offset",
+              `${{clamped + guideRightInset + guideGap}}px`
+            );
+            return clamped;
+          }}
+
+          function setGuideMinimized(minimized) {{
+            const root = getRoot();
+            if (!root) return;
+            root.classList.toggle("minimized", minimized);
+            const btn = root.querySelector("#winprob-guide-minimize");
+            if (btn) {{
+              btn.textContent = minimized ? "‹" : "›";
+              btn.title = minimized ? "Expand guide" : "Minimize guide";
+              btn.setAttribute("aria-label", btn.title);
+            }}
+            if (minimized) {{
+              doc.documentElement.style.setProperty(
+                "--winprob-guide-offset",
+                `${{MINIMIZED_OFFSET}}px`
+              );
+            }} else {{
+              applyGuideWidth(loadGuideWidth());
+            }}
+            win.localStorage.setItem(MINIMIZED_STORAGE_KEY, minimized ? "1" : "0");
+          }}
+
+          function toggleGuideMinimized() {{
+            const root = getRoot();
+            if (!root) return;
+            setGuideMinimized(!root.classList.contains("minimized"));
+          }}
+
+          function bindGuideControls(root) {{
+            const btn = root.querySelector("#winprob-guide-minimize");
+            if (btn) {{
+              btn.onclick = (event) => {{
+                event.preventDefault();
+                event.stopPropagation();
+                toggleGuideMinimized();
+              }};
+            }}
+
             const handle = root.querySelector("#winprob-guide-resize");
-            if (!handle || handle.dataset.bound === "1") return;
-            handle.dataset.bound = "1";
+            if (handle) {{
+              let dragging = false;
+              const onMove = (clientX) => {{
+                const activeRoot = getRoot();
+                if (!dragging || !activeRoot || activeRoot.classList.contains("minimized")) return;
+                const rightEdge = activeRoot.getBoundingClientRect().right;
+                const nextWidth = applyGuideWidth(rightEdge - clientX);
+                win.localStorage.setItem(WIDTH_STORAGE_KEY, String(nextWidth));
+              }};
+              const stopDrag = () => {{
+                if (!dragging) return;
+                dragging = false;
+                handle.classList.remove("dragging");
+                const activeRoot = getRoot();
+                if (activeRoot) {{
+                  win.localStorage.setItem(WIDTH_STORAGE_KEY, String(activeRoot.offsetWidth));
+                }}
+              }};
 
-            let dragging = false;
-
-            const onMove = (clientX) => {{
-              const rightEdge = root.getBoundingClientRect().right;
-              applyGuideWidth(rightEdge - clientX);
-            }};
-
-            handle.addEventListener("mousedown", (event) => {{
-              dragging = true;
-              handle.classList.add("dragging");
-              event.preventDefault();
-            }});
-
-            handle.addEventListener(
-              "touchstart",
-              (event) => {{
+              handle.onmousedown = (event) => {{
                 dragging = true;
                 handle.classList.add("dragging");
-                if (event.touches[0]) {{
-                  onMove(event.touches[0].clientX);
-                }}
                 event.preventDefault();
-              }},
-              {{ passive: false }}
-            );
-
-            win.addEventListener("mousemove", (event) => {{
-              if (!dragging) return;
-              onMove(event.clientX);
-            }});
-
-            win.addEventListener(
-              "touchmove",
-              (event) => {{
+              }};
+              handle.ontouchstart = (event) => {{
+                dragging = true;
+                handle.classList.add("dragging");
+                if (event.touches[0]) onMove(event.touches[0].clientX);
+                event.preventDefault();
+              }};
+              win.onmousemove = (event) => onMove(event.clientX);
+              win.ontouchmove = (event) => {{
                 if (!dragging || !event.touches[0]) return;
                 onMove(event.touches[0].clientX);
                 event.preventDefault();
-              }},
-              {{ passive: false }}
-            );
+              }};
+              win.onmouseup = stopDrag;
+              win.ontouchend = stopDrag;
+            }}
 
-            const stopDrag = () => {{
-              if (!dragging) return;
-              dragging = false;
-              handle.classList.remove("dragging");
-              win.localStorage.setItem(WIDTH_STORAGE_KEY, String(root.offsetWidth));
+            root.onclick = (event) => {{
+              const activeRoot = getRoot();
+              if (!activeRoot || !activeRoot.classList.contains("minimized")) return;
+              if (event.target.closest("#winprob-guide-minimize")) return;
+              setGuideMinimized(false);
             }};
-
-            win.addEventListener("mouseup", stopDrag);
-            win.addEventListener("touchend", stopDrag);
           }}
 
-          function removeGuide() {{
-            doc.getElementById("winprob-guide-root")?.remove();
-            doc.getElementById("winprob-guide-style")?.remove();
-            doc.body?.classList.remove("winprob-guide-active");
-          }}
-
-          if (!MODE_ON) {{
-            removeGuide();
-            return;
-          }}
-
-          const styleEl = doc.getElementById("winprob-guide-style");
-          if (styleEl) {{
-            styleEl.textContent = STYLES;
-          }} else {{
-            const style = doc.createElement("style");
-            style.id = "winprob-guide-style";
-            style.textContent = STYLES;
-            doc.head.appendChild(style);
-          }}
-
-          let root = doc.getElementById("winprob-guide-root");
-          if (!root) {{
-            root = doc.createElement("div");
-            root.id = "winprob-guide-root";
-            doc.body.appendChild(root);
-          }}
-
-          if (root.dataset.version !== DOM_VERSION || !root.querySelector(".winprob-guide-character")) {{
-            root.innerHTML = guideMarkup();
-            root.dataset.version = DOM_VERSION;
-          }}
-
-          applyGuideWidth(loadGuideWidth());
-          setupGuideResize();
-
-          doc.body.classList.add("winprob-guide-active");
-
-          const bubble = root.querySelector("#winprob-guide-text");
-          const bubbleWrap = root.querySelector("#winprob-guide-bubble");
-          const character = root.querySelector(".winprob-guide-character");
           let lastTip = "";
-          let scrollTicking = false;
+
+          function setTip(text) {{
+            const root = getRoot();
+            if (!root || !text) return;
+            const bubble = root.querySelector("#winprob-guide-text");
+            const bubbleWrap = root.querySelector("#winprob-guide-bubble");
+            const character = root.querySelector(".winprob-guide-character");
+            if (!bubble || !bubbleWrap) return;
+            if (text === lastTip) return;
+            lastTip = text;
+            bubble.textContent = text;
+            bubbleWrap.classList.add("visible");
+            if (character) {{
+              character.classList.remove("react");
+              void character.offsetWidth;
+              character.classList.add("react");
+            }}
+          }}
 
           function resolveSectionKey(id) {{
             if (!id) return "default";
@@ -377,106 +426,117 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
             return resolveSectionKey(id) !== "default";
           }}
 
-          function setTip(text) {{
-            if (!text || !bubble || !bubbleWrap) return;
-            if (text === lastTip) return;
-            lastTip = text;
-            bubble.textContent = text;
-            bubbleWrap.classList.add("visible");
-            character?.classList.remove("react");
-            void character?.offsetWidth;
-            character?.classList.add("react");
-          }}
-
-          function collectAnchors() {{
-            const anchors = Array.from(doc.querySelectorAll("[id]")).filter((el) => shouldTrackSection(el.id));
-            return anchors.sort((a, b) => {{
-              if (a === b) return 0;
-              const position = a.compareDocumentPosition(b);
-              if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-              if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-              return 0;
-            }});
-          }}
-
-          function getActiveAnchor(anchors) {{
-            if (!anchors.length) return null;
-            const viewportHeight = win.innerHeight || doc.documentElement.clientHeight;
-            // Trigger when section title reaches the upper half of the viewport.
-            const triggerY = viewportHeight * 0.38;
-
-            let active = anchors[0];
-            for (const el of anchors) {{
-              const top = el.getBoundingClientRect().top;
-              if (top <= triggerY) {{
-                active = el;
+          function refreshGuideTip() {{
+            if (PAYLOAD.force_home) {{
+              setTip(PAYLOAD.home || PAYLOAD.default);
+              return;
+            }}
+            const anchors = Array.from(doc.querySelectorAll("[id]"))
+              .filter((el) => shouldTrackSection(el.id))
+              .sort((a, b) => {{
+                if (a === b) return 0;
+                const position = a.compareDocumentPosition(b);
+                if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+                if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+                return 0;
+              }});
+            if (anchors.length) {{
+              const viewportHeight = win.innerHeight || doc.documentElement.clientHeight;
+              const triggerY = viewportHeight * 0.38;
+              let active = anchors[0];
+              for (const el of anchors) {{
+                if (el.getBoundingClientRect().top <= triggerY) active = el;
               }}
+              const key = resolveSectionKey(active.id);
+              setTip(PAYLOAD.sections[key] || PAYLOAD.default);
+              return;
             }}
-            return active;
+            if (!lastTip) setTip(PAYLOAD.default);
           }}
 
-          function updateGuideFromScroll() {{
-            const anchors = collectAnchors();
-            const active = getActiveAnchor(anchors);
-            if (!active) return;
-            const key = resolveSectionKey(active.id);
-            const tip = PAYLOAD.sections[key] || PAYLOAD.default;
-            setTip(tip);
-          }}
+          function ensureParentObservers() {{
+            win.__winprobGuideRefreshTip = refreshGuideTip;
+            win.__winprobGuideSetTip = setTip;
+            win.__winprobGuidePayload = PAYLOAD;
 
-          function onScroll() {{
-            if (scrollTicking) return;
-            scrollTicking = true;
-            win.requestAnimationFrame(() => {{
-              updateGuideFromScroll();
-              scrollTicking = false;
+            if (win.__winprobGuideScrollBound) return;
+            win.__winprobGuideScrollBound = true;
+
+            let scrollTicking = false;
+            const onScroll = () => {{
+              if (scrollTicking) return;
+              scrollTicking = true;
+              win.requestAnimationFrame(() => {{
+                win.__winprobGuideRefreshTip?.();
+                scrollTicking = false;
+              }});
+            }};
+
+            [win, doc, doc.documentElement, doc.body,
+              doc.querySelector(".main"),
+              doc.querySelector('[data-testid="stAppViewContainer"]'),
+              doc.querySelector('[data-testid="stMain"]'),
+            ].filter(Boolean).forEach((target) => {{
+              target.addEventListener("scroll", onScroll, {{ passive: true }});
             }});
-          }}
+            win.addEventListener("resize", onScroll);
 
-          if (PAYLOAD.force_home) {{
-            setTip(PAYLOAD.home || PAYLOAD.default);
-          }} else {{
-            updateGuideFromScroll();
-            if (!lastTip) {{
-              setTip(PAYLOAD.default);
-            }}
-          }}
-
-          const scrollTargets = [
-            win,
-            doc,
-            doc.documentElement,
-            doc.body,
-            doc.querySelector(".main"),
-            doc.querySelector('[data-testid="stAppViewContainer"]'),
-            doc.querySelector('[data-testid="stMain"]'),
-          ].filter(Boolean);
-
-          scrollTargets.forEach((target) => {{
-            target.addEventListener("scroll", onScroll, {{ passive: true }});
-          }});
-          win.addEventListener("resize", onScroll);
-
-          if (!doc.body.dataset.winprobGuideClickBound) {{
-            doc.body.dataset.winprobGuideClickBound = "1";
             doc.body.addEventListener("click", (event) => {{
               const summary = event.target.closest("details summary");
               if (!summary) return;
               window.setTimeout(() => {{
                 const details = summary.parentElement;
                 if (!details?.open) return;
-                const label = summary.innerText.trim();
-                const tip = PAYLOAD.expanders[label];
-                if (tip) setTip(tip);
+                const payload = win.__winprobGuidePayload;
+                const tip = payload?.expanders?.[summary.innerText.trim()];
+                if (tip) win.__winprobGuideSetTip?.(tip);
               }}, 120);
             }}, true);
+
+            new MutationObserver(onScroll).observe(doc.body, {{ childList: true, subtree: true }});
           }}
 
-          if (!doc.body.dataset.winprobGuideMutationBound) {{
-            doc.body.dataset.winprobGuideMutationBound = "1";
-            const mo = new MutationObserver(() => onScroll());
-            mo.observe(doc.body, {{ childList: true, subtree: true }});
+          const styleEl = doc.getElementById("winprob-guide-style");
+          if (styleEl) {{
+            styleEl.textContent = STYLES;
+          }} else {{
+            const style = doc.createElement("style");
+            style.id = "winprob-guide-style";
+            style.textContent = STYLES;
+            doc.head.appendChild(style);
           }}
+
+          let root = getRoot();
+          if (!root) {{
+            root = doc.createElement("div");
+            root.id = "winprob-guide-root";
+            doc.body.appendChild(root);
+          }}
+
+          doc.body.appendChild(root);
+
+          if (
+            root.dataset.version !== DOM_VERSION
+            || !root.querySelector(".winprob-guide-character")
+            || !root.querySelector("#winprob-guide-minimize")
+          ) {{
+            root.innerHTML = guideMarkup();
+            root.dataset.version = DOM_VERSION;
+          }}
+
+          doc.body.classList.add("winprob-guide-active");
+          bindGuideControls(root);
+
+          const shouldMinimize = loadGuideMinimized();
+          if (root.classList.contains("minimized") !== shouldMinimize) {{
+            setGuideMinimized(shouldMinimize);
+          }} else if (!shouldMinimize) {{
+            applyGuideWidth(loadGuideWidth());
+          }}
+
+          ensureParentObservers();
+          if (PAYLOAD.force_home) lastTip = "";
+          refreshGuideTip();
         }})();
         </script>
         """,

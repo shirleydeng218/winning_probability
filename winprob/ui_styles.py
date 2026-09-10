@@ -38,14 +38,18 @@ def inject_app_styles() -> None:
         .main .block-container {{
             padding-top: 2.75rem;
             padding-bottom: 2rem;
-            max-width: 1200px;
+            max-width: min(1140px, 100%);
+            margin-left: auto;
+            margin-right: auto;
         }}
 
         /* Legacy selector fallback for older Streamlit layouts */
         .block-container {{
             padding-top: 2.75rem;
             padding-bottom: 2rem;
-            max-width: 1200px;
+            max-width: min(1140px, 100%);
+            margin-left: auto;
+            margin-right: auto;
         }}
 
         h1 {{

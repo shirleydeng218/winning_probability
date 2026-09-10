@@ -62,6 +62,46 @@ def render_radar_chart(win_prob_df: pd.DataFrame, metric: str) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
+def render_split_radar_chart(win_prob_df: pd.DataFrame, metric: str) -> None:
+    sub = win_prob_df[win_prob_df["metric"] == metric].copy()
+    if sub.empty:
+        return
+
+    metrics_map = {
+        "Winning Probability": "win_prob",
+        "CPS (inverted)": "cps",
+        "Conversion Rate": "conversion_rate",
+        "Conversions": "conversions",
+        "Reach": "users",
+    }
+    normalized_rows = []
+    for label, col in metrics_map.items():
+        values = sub[col].astype(float)
+        if col == "cps":
+            values = 1 / values.replace(0, np.nan)
+        min_v, max_v = values.min(), values.max()
+        norm = (values - min_v) / (max_v - min_v) if max_v > min_v else values * 0 + 0.5
+        for cell, val in zip(sub["cell"], norm):
+            normalized_rows.append({"Cell": cell, "Metric": label, "Score": val})
+
+    plot_df = pd.DataFrame(normalized_rows)
+    fig = px.line_polar(
+        plot_df,
+        r="Score",
+        theta="Metric",
+        color="Cell",
+        line_close=True,
+        color_discrete_sequence=px.colors.qualitative.Set2,
+    )
+    fig.update_layout(**_dark_layout(f"Cell Comparison — {metric}"))
+    fig.update_polars(
+        bgcolor=NAVY,
+        radialaxis=dict(gridcolor="#2F5175", linecolor="#2F5175", tickfont={"color": TEXT}),
+        angularaxis=dict(gridcolor="#2F5175", linecolor="#2F5175", tickfont={"color": TEXT}),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def render_bump_chart(rank_df: pd.DataFrame, metric: str) -> None:
     rank_cols = [c for c in rank_df.columns if c.startswith("Rank:")]
     if not rank_cols:

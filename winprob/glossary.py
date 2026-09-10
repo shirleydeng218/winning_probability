@@ -210,6 +210,54 @@ GLOSSARY: Dict[str, List[GlossaryTerm]] = {
             "definition": "Significance is the statistical confidence level; Confidence is the plain-language read (Confident, Directional, or No significance).",
         },
     ],
+    "split_upload": [
+        {
+            "term": "spend_usd",
+            "definition": "Total media spend for the cell in USD. Required on every row.",
+        },
+        {
+            "term": "n_test",
+            "definition": "Users reached in the cell. Used for conversion rate and reach comparisons.",
+        },
+        {
+            "term": "test_conversions",
+            "definition": "Observed conversion count in the cell. Required for posterior modeling.",
+        },
+        {
+            "term": "impressions",
+            "definition": "Impressions delivered for the cell. Used when comparing on impressions.",
+        },
+        {
+            "term": "CPS",
+            "definition": "Cost per sign-up (or conversion): spend_usd divided by test_conversions.",
+        },
+        {
+            "term": "event_type",
+            "definition": "Conversion metric label (e.g., subscription, trial). One row per cell per metric.",
+        },
+        {
+            "term": "test_conv_rate",
+            "definition": "Optional conversion rate. Derived from test_conversions / n_test when blank.",
+        },
+    ],
+    "split_configure": [
+        {
+            "term": "Compare on",
+            "definition": "Metric used to rank cells in simulation: conversion rate, conversions, reach, or impressions.",
+        },
+        {
+            "term": "ROPE",
+            "definition": "Region of practical equivalence: cells within a small margin are treated as ties.",
+        },
+        {
+            "term": "Simulations",
+            "definition": "Monte Carlo draws from posterior distributions used to estimate winning probability.",
+        },
+        {
+            "term": "Conversion metrics",
+            "definition": "Subset of event_type values included in the analysis run.",
+        },
+    ],
     "split_test": [
         {
             "term": "ROPE",

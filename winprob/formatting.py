@@ -136,8 +136,39 @@ def format_stakeholder_summary(df: pd.DataFrame) -> pd.DataFrame:
     elif "Win Prob" in out.columns:
         out = out.rename(columns={"Win Prob": LABEL_WINNING_PROBABILITY})
         out[LABEL_WINNING_PROBABILITY] = out[LABEL_WINNING_PROBABILITY].apply(fmt_winning_probability)
-    if LABEL_CPIS in out.columns:
+    if LABEL_CPS in out.columns:
+        out[LABEL_CPS] = out[LABEL_CPS].apply(fmt_cps)
+    elif LABEL_CPIS in out.columns:
         out[LABEL_CPIS] = out[LABEL_CPIS].apply(fmt_cpis)
+    return out
+
+
+def format_split_summary(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if LABEL_WINNING_PROBABILITY in out.columns:
+        out[LABEL_WINNING_PROBABILITY] = out[LABEL_WINNING_PROBABILITY].apply(fmt_winning_probability)
+    if LABEL_CPS in out.columns:
+        out[LABEL_CPS] = out[LABEL_CPS].apply(fmt_cps)
+    if "Reach" in out.columns:
+        out["Reach"] = out["Reach"].apply(fmt_count)
+    if "Conversions" in out.columns:
+        out["Conversions"] = out["Conversions"].apply(fmt_count)
+    if "Impressions" in out.columns:
+        out["Impressions"] = out["Impressions"].apply(fmt_count)
+    if "Conversion Rate" in out.columns:
+        out["Conversion Rate"] = out["Conversion Rate"].apply(fmt_cvr_lift)
+    if "CI Low" in out.columns:
+        out["CI Low"] = out["CI Low"].apply(
+            lambda v: fmt_cvr_lift(v) if isinstance(v, (int, float)) else v
+        )
+    if "CI High" in out.columns:
+        out["CI High"] = out["CI High"].apply(
+            lambda v: fmt_cvr_lift(v) if isinstance(v, (int, float)) else v
+        )
+    if "p-value" in out.columns:
+        out["p-value"] = out["p-value"].apply(
+            lambda x: f"{x:.4f}" if pd.notnull(x) and isinstance(x, (int, float)) else "N/A"
+        )
     return out
 
 

@@ -11,7 +11,7 @@ SECTION_TIPS: Dict[str, str] = {
     "configure_analysis": "Set how a winner is picked and which conversion metrics to include.",
     "test_overview": "Quick sanity check on cells, spend, and metrics before results load.",
     "executive_summary": "Start here — who's winning and how confident the read is (Confident vs Directional).",
-    "per_cell_metrics": "Raw performance by cell — spend, lift, CPiS, and significance.",
+    "per_cell_metrics": "Raw performance by cell — spend, reach, conversions, and efficiency metrics.",
     "multi_metric_rankings": "See how cells rank across winning probability, CPiS, lift, and significance.",
     "cell_comparison": "A normalized snapshot of how cells compare on key dimensions.",
     "distribution_uncertainty": "Winning probability comes from many simulations — explore the spread here.",

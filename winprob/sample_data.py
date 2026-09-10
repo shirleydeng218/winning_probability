@@ -59,9 +59,62 @@ INPUT_TEMPLATE_COLUMNS = [
 ]
 
 
+SAMPLE_SPLIT_ROWS = [
+    {
+        "cell_name": "Cell A — Broad",
+        "event_type": "subscription",
+        "spend_usd": 420_000,
+        "n_test": 8_500_000,
+        "test_conversions": 18_700,
+        "impressions": 42_000_000,
+        "CPS": 22.46,
+        "test_conv_rate": 0.0022,
+    },
+    {
+        "cell_name": "Cell B — Targeted",
+        "event_type": "subscription",
+        "spend_usd": 395_000,
+        "n_test": 6_200_000,
+        "test_conversions": 16_120,
+        "impressions": 31_500_000,
+        "CPS": 24.50,
+        "test_conv_rate": 0.0026,
+    },
+    {
+        "cell_name": "Cell C — High Intent",
+        "event_type": "subscription",
+        "spend_usd": 410_000,
+        "n_test": 4_800_000,
+        "test_conversions": 14_880,
+        "impressions": 22_000_000,
+        "CPS": 27.55,
+        "test_conv_rate": 0.0031,
+    },
+]
+
+SPLIT_INPUT_TEMPLATE_COLUMNS = [
+    "cell_name",
+    "event_type",
+    "spend_usd",
+    "n_test",
+    "test_conversions",
+    "impressions",
+    "CPS",
+    "test_conv_rate",
+]
+
+
 def get_sample_incrementality_df() -> pd.DataFrame:
     return pd.DataFrame(SAMPLE_INCREMENTALITY_ROWS)
 
 
+def get_sample_split_df() -> pd.DataFrame:
+    return pd.DataFrame(SAMPLE_SPLIT_ROWS)
+
+
 def get_input_template_df() -> pd.DataFrame:
     return pd.DataFrame(columns=INPUT_TEMPLATE_COLUMNS)
+
+
+def get_split_input_template_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=SPLIT_INPUT_TEMPLATE_COLUMNS)

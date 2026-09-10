@@ -4,7 +4,7 @@ import streamlit as st
 
 from winprob.config import configure_plot_theme
 from winprob.glossary import inject_navigation_styles
-from winprob.guide import inject_winprob_guide, render_guide_sidebar
+from winprob.guide import inject_winprob_guide
 from winprob.incrementality import run_incrementality_app
 from winprob.intro import render_app_intro
 from winprob.session_reset import render_sidebar_restart, test_type_radio_key
@@ -16,7 +16,6 @@ def run() -> None:
     configure_plot_theme()
     inject_navigation_styles()
     render_sidebar_restart()
-    render_guide_sidebar()
     render_app_header()
 
     st.title("WinProb: Media Test Evaluator")
@@ -39,14 +38,14 @@ def run() -> None:
             '<p class="winprob-section-caption">Choose an incrementality or split test flow to begin.</p>',
             unsafe_allow_html=True,
         )
-        inject_winprob_guide(show_home_tip=True)
+    else:
+        st.markdown("---")
+        if test_type == "Incrementality test (Treatment vs Control)":
+            run_incrementality_app()
+        elif test_type == "Split test (A/B/C without control)":
+            run_split_test_app()
+
+    inject_winprob_guide(show_home_tip=test_type is None)
+
+    if test_type is None:
         st.stop()
-
-    st.markdown("---")
-
-    if test_type == "Incrementality test (Treatment vs Control)":
-        run_incrementality_app()
-    elif test_type == "Split test (A/B/C without control)":
-        run_split_test_app()
-
-    inject_winprob_guide()
