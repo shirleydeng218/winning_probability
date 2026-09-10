@@ -234,13 +234,14 @@ def _bayes_character_html() -> str:
     )
 
 
-def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
+def inject_winprob_guide(*, show_home_tip: bool = False, page_key: str = "home") -> None:
     """Inject the fixed guide rail into the parent Streamlit document."""
     payload = build_guide_payload()
     if show_home_tip:
         payload["force_home"] = True
 
     payload_json = json.dumps(payload).replace("</", "<\\/")
+    page_key_json = json.dumps(page_key)
     character_html = json.dumps(_bayes_character_html())
     styles = _GUIDE_STYLES.replace("`", "")
 
@@ -249,6 +250,7 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
         <script>
         (function () {{
           const PAYLOAD = {payload_json};
+          const PAGE_KEY = {page_key_json};
           const STYLES = `{styles}`;
           const CHARACTER_HTML = {character_html};
           const DOM_VERSION = {json.dumps(_GUIDE_DOM_VERSION)};
@@ -337,63 +339,85 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
           function bindGuideControls(root) {{
             const btn = root.querySelector("#winprob-guide-minimize");
             if (btn) {{
-              btn.onclick = (event) => {{
+              if (btn.__winprobGuideClick) {{
+                btn.removeEventListener("click", btn.__winprobGuideClick);
+              }}
+              btn.__winprobGuideClick = (event) => {{
                 event.preventDefault();
                 event.stopPropagation();
                 toggleGuideMinimized();
               }};
+              btn.addEventListener("click", btn.__winprobGuideClick);
             }}
 
             const handle = root.querySelector("#winprob-guide-resize");
             if (handle) {{
-              let dragging = false;
-              const onMove = (clientX) => {{
+              if (!win.__winprobGuideResizeState) {{
+                win.__winprobGuideResizeState = {{ dragging: false, handle: null }};
+              }}
+              const state = win.__winprobGuideResizeState;
+              if (state.handle && state.handle !== handle) {{
+                state.handle.removeEventListener("mousedown", state.onMouseDown);
+                state.handle.removeEventListener("touchstart", state.onTouchStart);
+              }}
+              state.handle = handle;
+              state.onMove = (clientX) => {{
                 const activeRoot = getRoot();
-                if (!dragging || !activeRoot || activeRoot.classList.contains("minimized")) return;
+                if (!state.dragging || !activeRoot || activeRoot.classList.contains("minimized")) return;
                 const rightEdge = activeRoot.getBoundingClientRect().right;
                 const nextWidth = applyGuideWidth(rightEdge - clientX);
                 win.localStorage.setItem(WIDTH_STORAGE_KEY, String(nextWidth));
               }};
-              const stopDrag = () => {{
-                if (!dragging) return;
-                dragging = false;
+              state.stopDrag = () => {{
+                if (!state.dragging) return;
+                state.dragging = false;
                 handle.classList.remove("dragging");
                 const activeRoot = getRoot();
                 if (activeRoot) {{
                   win.localStorage.setItem(WIDTH_STORAGE_KEY, String(activeRoot.offsetWidth));
                 }}
               }};
+              state.onMouseDown = (event) => {{
+                state.dragging = true;
+                handle.classList.add("dragging");
+                event.preventDefault();
+              }};
+              state.onTouchStart = (event) => {{
+                state.dragging = true;
+                handle.classList.add("dragging");
+                if (event.touches[0]) state.onMove(event.touches[0].clientX);
+                event.preventDefault();
+              }};
 
-              handle.onmousedown = (event) => {{
-                dragging = true;
-                handle.classList.add("dragging");
-                event.preventDefault();
-              }};
-              handle.ontouchstart = (event) => {{
-                dragging = true;
-                handle.classList.add("dragging");
-                if (event.touches[0]) onMove(event.touches[0].clientX);
-                event.preventDefault();
-              }};
-              win.onmousemove = (event) => onMove(event.clientX);
-              win.ontouchmove = (event) => {{
-                if (!dragging || !event.touches[0]) return;
-                onMove(event.touches[0].clientX);
-                event.preventDefault();
-              }};
-              win.onmouseup = stopDrag;
-              win.ontouchend = stopDrag;
+              handle.addEventListener("mousedown", state.onMouseDown);
+              handle.addEventListener("touchstart", state.onTouchStart, {{ passive: false }});
+
+              if (!win.__winprobGuideResizeWinBound) {{
+                win.__winprobGuideResizeWinBound = true;
+                win.addEventListener("mousemove", (event) => state.onMove(event.clientX));
+                win.addEventListener("touchmove", (event) => {{
+                  if (!state.dragging || !event.touches[0]) return;
+                  state.onMove(event.touches[0].clientX);
+                  event.preventDefault();
+                }}, {{ passive: false }});
+                win.addEventListener("mouseup", () => state.stopDrag());
+                win.addEventListener("touchend", () => state.stopDrag());
+              }}
             }}
 
-            root.onclick = (event) => {{
+            if (root.__winprobGuideExpandClick) {{
+              root.removeEventListener("click", root.__winprobGuideExpandClick);
+            }}
+            root.__winprobGuideExpandClick = (event) => {{
               const activeRoot = getRoot();
               if (!activeRoot || !activeRoot.classList.contains("minimized")) return;
               if (event.target.closest("#winprob-guide-minimize")) return;
               setGuideMinimized(false);
             }};
+            root.addEventListener("click", root.__winprobGuideExpandClick);
           }}
 
-          let lastTip = "";
+          win.__winprobGuideState = win.__winprobGuideState || {{ lastTip: "" }};
 
           function setTip(text) {{
             const root = getRoot();
@@ -402,8 +426,8 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
             const bubbleWrap = root.querySelector("#winprob-guide-bubble");
             const character = root.querySelector(".winprob-guide-character");
             if (!bubble || !bubbleWrap) return;
-            if (text === lastTip) return;
-            lastTip = text;
+            if (text === win.__winprobGuideState.lastTip) return;
+            win.__winprobGuideState.lastTip = text;
             bubble.textContent = text;
             bubbleWrap.classList.add("visible");
             if (character) {{
@@ -426,12 +450,8 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
             return resolveSectionKey(id) !== "default";
           }}
 
-          function refreshGuideTip() {{
-            if (PAYLOAD.force_home) {{
-              setTip(PAYLOAD.home || PAYLOAD.default);
-              return;
-            }}
-            const anchors = Array.from(doc.querySelectorAll("[id]"))
+          function collectAnchors() {{
+            return Array.from(doc.querySelectorAll("[id]"))
               .filter((el) => shouldTrackSection(el.id))
               .sort((a, b) => {{
                 if (a === b) return 0;
@@ -440,6 +460,14 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
                 if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
                 return 0;
               }});
+          }}
+
+          function refreshGuideTip() {{
+            if (PAYLOAD.force_home) {{
+              setTip(PAYLOAD.home || PAYLOAD.default);
+              return;
+            }}
+            const anchors = collectAnchors();
             if (anchors.length) {{
               const viewportHeight = win.innerHeight || doc.documentElement.clientHeight;
               const triggerY = viewportHeight * 0.38;
@@ -451,49 +479,67 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
               setTip(PAYLOAD.sections[key] || PAYLOAD.default);
               return;
             }}
-            if (!lastTip) setTip(PAYLOAD.default);
+            if (!win.__winprobGuideState.lastTip) setTip(PAYLOAD.default);
+          }}
+
+          function scheduleGuideRefresh() {{
+            if (win.__winprobGuideScrollTicking) return;
+            win.__winprobGuideScrollTicking = true;
+            win.requestAnimationFrame(() => {{
+              win.__winprobGuideRefreshTip?.();
+              win.__winprobGuideScrollTicking = false;
+            }});
+          }}
+
+          function setupAnchorTracking() {{
+            if (win.__winprobGuideIo) {{
+              win.__winprobGuideIo.disconnect();
+              win.__winprobGuideIo = null;
+            }}
+            refreshGuideTip();
+            const anchors = collectAnchors();
+            if (!anchors.length) return;
+
+            win.__winprobGuideIo = new IntersectionObserver(() => {{
+              scheduleGuideRefresh();
+            }}, {{
+              root: null,
+              threshold: [0, 0.05, 0.15, 0.35, 0.55, 0.75, 1],
+            }});
+            anchors.forEach((anchor) => win.__winprobGuideIo.observe(anchor));
           }}
 
           function ensureParentObservers() {{
             win.__winprobGuideRefreshTip = refreshGuideTip;
             win.__winprobGuideSetTip = setTip;
             win.__winprobGuidePayload = PAYLOAD;
+            win.__winprobGuideSetupAnchors = setupAnchorTracking;
 
-            if (win.__winprobGuideScrollBound) return;
-            win.__winprobGuideScrollBound = true;
+            if (!win.__winprobGuideScrollBound) {{
+              win.__winprobGuideScrollBound = true;
+              doc.addEventListener("scroll", scheduleGuideRefresh, {{ capture: true, passive: true }});
+              win.addEventListener("resize", scheduleGuideRefresh, {{ passive: true }});
 
-            let scrollTicking = false;
-            const onScroll = () => {{
-              if (scrollTicking) return;
-              scrollTicking = true;
-              win.requestAnimationFrame(() => {{
-                win.__winprobGuideRefreshTip?.();
-                scrollTicking = false;
-              }});
-            }};
+              doc.body.addEventListener("click", (event) => {{
+                const summary = event.target.closest("details summary");
+                if (!summary) return;
+                window.setTimeout(() => {{
+                  const details = summary.parentElement;
+                  if (!details?.open) return;
+                  const payload = win.__winprobGuidePayload;
+                  const tip = payload?.expanders?.[summary.innerText.trim()];
+                  if (tip) win.__winprobGuideSetTip?.(tip);
+                }}, 120);
+              }}, true);
 
-            [win, doc, doc.documentElement, doc.body,
-              doc.querySelector(".main"),
-              doc.querySelector('[data-testid="stAppViewContainer"]'),
-              doc.querySelector('[data-testid="stMain"]'),
-            ].filter(Boolean).forEach((target) => {{
-              target.addEventListener("scroll", onScroll, {{ passive: true }});
-            }});
-            win.addEventListener("resize", onScroll);
-
-            doc.body.addEventListener("click", (event) => {{
-              const summary = event.target.closest("details summary");
-              if (!summary) return;
-              window.setTimeout(() => {{
-                const details = summary.parentElement;
-                if (!details?.open) return;
-                const payload = win.__winprobGuidePayload;
-                const tip = payload?.expanders?.[summary.innerText.trim()];
-                if (tip) win.__winprobGuideSetTip?.(tip);
-              }}, 120);
-            }}, true);
-
-            new MutationObserver(onScroll).observe(doc.body, {{ childList: true, subtree: true }});
+              let mutationTimer = null;
+              new MutationObserver(() => {{
+                clearTimeout(mutationTimer);
+                mutationTimer = window.setTimeout(() => {{
+                  win.__winprobGuideSetupAnchors?.();
+                }}, 300);
+              }}).observe(doc.body, {{ childList: true, subtree: true }});
+            }}
           }}
 
           const styleEl = doc.getElementById("winprob-guide-style");
@@ -534,9 +580,20 @@ def inject_winprob_guide(*, show_home_tip: bool = False) -> None:
             applyGuideWidth(loadGuideWidth());
           }}
 
+          if (win.__winprobGuidePageKey !== PAGE_KEY) {{
+            win.__winprobGuidePageKey = PAGE_KEY;
+            win.__winprobGuideState.lastTip = "";
+            if (win.__winprobGuideIo) {{
+              win.__winprobGuideIo.disconnect();
+              win.__winprobGuideIo = null;
+            }}
+          }}
+
           ensureParentObservers();
-          if (PAYLOAD.force_home) lastTip = "";
-          refreshGuideTip();
+          if (PAYLOAD.force_home) win.__winprobGuideState.lastTip = "";
+          setupAnchorTracking();
+          window.setTimeout(() => win.__winprobGuideSetupAnchors?.(), 200);
+          window.setTimeout(() => win.__winprobGuideSetupAnchors?.(), 700);
         }})();
         </script>
         """,

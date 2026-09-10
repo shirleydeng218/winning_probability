@@ -1,5 +1,9 @@
 """WinProb Streamlit application entrypoint."""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import streamlit as st
 
 from winprob.config import configure_plot_theme
@@ -10,6 +14,18 @@ from winprob.intro import render_app_intro
 from winprob.session_reset import render_sidebar_restart, test_type_radio_key
 from winprob.split_test import run_split_test_app
 from winprob.ui_styles import render_app_header
+
+
+def _guide_page_key(test_type: Optional[str]) -> str:
+    if test_type is None:
+        return "home"
+    if test_type.startswith("Incrementality"):
+        step = st.session_state.get("incrementality_wizard_step", 0)
+        return f"incrementality:{step}"
+    if test_type.startswith("Split"):
+        step = st.session_state.get("split_wizard_step", 0)
+        return f"split:{step}"
+    return "unknown"
 
 
 def run() -> None:
@@ -45,7 +61,10 @@ def run() -> None:
         elif test_type == "Split test (A/B/C without control)":
             run_split_test_app()
 
-    inject_winprob_guide(show_home_tip=test_type is None)
+    inject_winprob_guide(
+        show_home_tip=test_type is None,
+        page_key=_guide_page_key(test_type),
+    )
 
     if test_type is None:
         st.stop()
