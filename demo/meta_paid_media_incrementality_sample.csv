@@ -1,0 +1,7 @@
+cell_name,event_type,spend_usd,n_control,n_test,test_conversions,control_conversions,relative_lift,Absolute_lift,absolute_lift_CI_min,absolute_lift_CI_max,CPIS,confidence_level
+Text Only,Duo Bundle Signups,387412,19490250,19370600,33735,25614,0.32519,8278,6800,9680,46.8,0.42
+Single Title + Text,Duo Bundle Signups,392847,19490250,19642350,35349,25614,0.36938,9535,7400,15800,41.2,0.52
+Multi Title + Text,Duo Bundle Signups,389156,19490250,19457800,34316,25614,0.34197,8745,8100,11400,44.5,0.31
+Text Only,Total Signups,387412,19490250,19370600,77912,65738,0.19251,12578,10500,14600,30.8,0.38
+Single Title + Text,Total Signups,392847,19490250,19642350,81132,65738,0.22462,14881,11400,24200,26.4,0.48
+Multi Title + Text,Total Signups,389156,19490250,19457800,79236,65738,0.20734,13607,13200,15800,28.6,0.29

@@ -2,45 +2,103 @@
 
 import pandas as pd
 
+# Hypothetical Meta paid-media incrementality test: three creative cells x two metrics.
+# Frequentist incremental CIs overlap (no clear winner); WinProb resolves via simulation.
+_META_TEST_NAME = "Meta Paid Media Creative Test"
+_N_CONTROL = 19_490_250
+_CTRL_CONV_DUO = 25_614
+_CTRL_CONV_TOTAL = 65_738
+
 SAMPLE_INCREMENTALITY_ROWS = [
     {
-        "cell_name": "Cell 1 - CLAL 15%",
-        "event_type": "usergen:SVOD_Bundle: hulu_disney_ads_2p_bundle",
-        "spend_usd": 374274.36,
-        "n_control": 6218481,
-        "n_test": 15299015,
-        "test_conversions": 7073,
-        "control_conversions": 1846,
-        "relative_lift": 0.55737,
-        "Absolute_lift": 2531,
-        "CPIS": 147.85,
-        "confidence_level": 0.05,
+        "cell_name": "Text Only",
+        "event_type": "Duo Bundle Signups",
+        "spend_usd": 387_412,
+        "n_control": _N_CONTROL,
+        "n_test": 19_370_600,
+        "test_conversions": 33_735,
+        "control_conversions": _CTRL_CONV_DUO,
+        "relative_lift": 0.32519,
+        "Absolute_lift": 8_278,
+        "absolute_lift_CI_min": 6_800,
+        "absolute_lift_CI_max": 9_680,
+        "CPIS": 46.80,
+        "confidence_level": 0.42,
     },
     {
-        "cell_name": "Cell 2 - CLAL 100%",
-        "event_type": "usergen:SVOD_Bundle: hulu_disney_ads_2p_bundle",
-        "spend_usd": 374245.14,
-        "n_control": 10429924,
-        "n_test": 24285376,
-        "test_conversions": 8948,
-        "control_conversions": 2241,
-        "relative_lift": 0.71483,
-        "Absolute_lift": 3730,
-        "CPIS": 100.33,
-        "confidence_level": 0.47,
+        "cell_name": "Single Title + Text",
+        "event_type": "Duo Bundle Signups",
+        "spend_usd": 392_847,
+        "n_control": _N_CONTROL,
+        "n_test": 19_642_350,
+        "test_conversions": 35_349,
+        "control_conversions": _CTRL_CONV_DUO,
+        "relative_lift": 0.36938,
+        "Absolute_lift": 9_535,
+        "absolute_lift_CI_min": 7_400,
+        "absolute_lift_CI_max": 15_800,
+        "CPIS": 41.20,
+        "confidence_level": 0.52,
     },
     {
-        "cell_name": "Cell 3 - Target Everyone",
-        "event_type": "usergen:SVOD_Bundle: hulu_disney_ads_2p_bundle",
-        "spend_usd": 374324.11,
-        "n_control": 15028309,
-        "n_test": 33736778,
-        "test_conversions": 10763,
-        "control_conversions": 2766,
-        "relative_lift": 0.73336,
-        "Absolute_lift": 4554,
-        "CPIS": 82.20,
-        "confidence_level": 0.10,
+        "cell_name": "Multi Title + Text",
+        "event_type": "Duo Bundle Signups",
+        "spend_usd": 389_156,
+        "n_control": _N_CONTROL,
+        "n_test": 19_457_800,
+        "test_conversions": 34_316,
+        "control_conversions": _CTRL_CONV_DUO,
+        "relative_lift": 0.34197,
+        "Absolute_lift": 8_745,
+        "absolute_lift_CI_min": 8_100,
+        "absolute_lift_CI_max": 11_400,
+        "CPIS": 44.50,
+        "confidence_level": 0.31,
+    },
+    {
+        "cell_name": "Text Only",
+        "event_type": "Total Signups",
+        "spend_usd": 387_412,
+        "n_control": _N_CONTROL,
+        "n_test": 19_370_600,
+        "test_conversions": 77_912,
+        "control_conversions": _CTRL_CONV_TOTAL,
+        "relative_lift": 0.19251,
+        "Absolute_lift": 12_578,
+        "absolute_lift_CI_min": 10_500,
+        "absolute_lift_CI_max": 14_600,
+        "CPIS": 30.80,
+        "confidence_level": 0.38,
+    },
+    {
+        "cell_name": "Single Title + Text",
+        "event_type": "Total Signups",
+        "spend_usd": 392_847,
+        "n_control": _N_CONTROL,
+        "n_test": 19_642_350,
+        "test_conversions": 81_132,
+        "control_conversions": _CTRL_CONV_TOTAL,
+        "relative_lift": 0.22462,
+        "Absolute_lift": 14_881,
+        "absolute_lift_CI_min": 11_400,
+        "absolute_lift_CI_max": 24_200,
+        "CPIS": 26.40,
+        "confidence_level": 0.48,
+    },
+    {
+        "cell_name": "Multi Title + Text",
+        "event_type": "Total Signups",
+        "spend_usd": 389_156,
+        "n_control": _N_CONTROL,
+        "n_test": 19_457_800,
+        "test_conversions": 79_236,
+        "control_conversions": _CTRL_CONV_TOTAL,
+        "relative_lift": 0.20734,
+        "Absolute_lift": 13_607,
+        "absolute_lift_CI_min": 13_200,
+        "absolute_lift_CI_max": 15_800,
+        "CPIS": 28.60,
+        "confidence_level": 0.29,
     },
 ]
 
@@ -54,10 +112,11 @@ INPUT_TEMPLATE_COLUMNS = [
     "control_conversions",
     "relative_lift",
     "Absolute_lift",
+    "absolute_lift_CI_min",
+    "absolute_lift_CI_max",
     "CPIS",
     "confidence_level",
 ]
-
 
 SAMPLE_SPLIT_ROWS = [
     {
@@ -106,6 +165,10 @@ SPLIT_INPUT_TEMPLATE_COLUMNS = [
 
 def get_sample_incrementality_df() -> pd.DataFrame:
     return pd.DataFrame(SAMPLE_INCREMENTALITY_ROWS)
+
+
+def get_sample_incrementality_test_name() -> str:
+    return _META_TEST_NAME
 
 
 def get_sample_split_df() -> pd.DataFrame:

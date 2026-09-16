@@ -19,7 +19,11 @@ from winprob.glossary import (
 )
 from winprob.llm_summary import build_incrementality_summary_context
 from winprob.results_views import render_incrementality_results
-from winprob.sample_data import get_input_template_df, get_sample_incrementality_df
+from winprob.sample_data import (
+    get_input_template_df,
+    get_sample_incrementality_df,
+    get_sample_incrementality_test_name,
+)
 from winprob.session_reset import clear_app_session_state
 from winprob.simulation import (
     WINNING_RULES,
@@ -136,7 +140,7 @@ def run_incrementality_app():
         raw = None
         if use_sample:
             st.session_state[sample_mode_key] = True
-            st.session_state[f"{namespace}_test_name"] = "Sample Incrementality Test"
+            st.session_state[f"{namespace}_test_name"] = get_sample_incrementality_test_name()
             raw = get_sample_incrementality_df()
         elif input_file is not None:
             st.session_state[sample_mode_key] = False
@@ -179,7 +183,8 @@ def run_incrementality_app():
             render_main_glossary_cards("upload")
             st.markdown(
                 """
-                **Optional columns:** `relative_lift`, `test_conv_rate`, `control_conv_rate`, CI columns
+                **Optional columns:** `relative_lift`, `test_conv_rate`, `control_conv_rate`,
+                `absolute_lift_CI_min`, `absolute_lift_CI_max`
                 """
             )
         return
