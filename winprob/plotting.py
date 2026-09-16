@@ -5,8 +5,10 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
+from matplotlib.lines import Line2D
 
 from winprob.config import GREEN, GRID, NAVY, RED, TEXT
+from winprob.charts_plotly import _format_ci_point_label
 
 
 def figure_to_png_bytes(fig) -> bytes:
@@ -34,11 +36,13 @@ def render_ci_errorbar_figure(
 
     scale = 100.0 if as_percent else 1.0
     fig, ax = plt.subplots(figsize=(10, 5))
+    y_max = float("-inf")
     for _, row in plot_df.iterrows():
         cell = row["study_name"]
         point = float(row[point_col]) * scale
         lo = float(row[lo_col]) * scale
         hi = float(row[hi_col]) * scale
+        y_max = max(y_max, hi, point)
         ax.errorbar(
             x=[cell],
             y=[point],
@@ -49,10 +53,32 @@ def render_ci_errorbar_figure(
             capsize=5,
             capthick=2,
         )
+        ax.annotate(
+            _format_ci_point_label(point, as_percent),
+            xy=(cell, point),
+            xytext=(0, 8),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            color=TEXT,
+            fontsize=10,
+        )
     ax.axhline(0, color=RED, linestyle="--", linewidth=1.5)
     ax.set_title(title)
     ax.set_ylabel(y_label)
+    if y_max > float("-inf"):
+        ax.set_ylim(top=y_max * 1.12)
     plt.xticks(rotation=25, ha="right")
+    ax.legend(
+        handles=[
+            Line2D(
+                [0], [0], marker="o", color="w", markerfacecolor=GREEN,
+                markersize=8, label="Point estimate",
+            ),
+            Line2D([0], [0], color=GREEN, linewidth=3, label="95% CI"),
+        ],
+        loc="upper right",
+    )
     apply_dark_axes(ax, zero_line=False)
     fig.tight_layout()
     return fig

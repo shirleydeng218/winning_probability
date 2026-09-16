@@ -199,6 +199,14 @@ def _ci_bounds(row: pd.Series, point: float) -> tuple:
     return point, point
 
 
+def _format_ci_point_label(value: float, as_percent: bool) -> str:
+    if as_percent:
+        return f"{value:.1f}%"
+    if abs(value) >= 100:
+        return f"{value:,.0f}"
+    return f"{value:.1f}"
+
+
 def _render_ci_errorbar(
     rows: pd.DataFrame,
     *,
@@ -214,7 +222,7 @@ def _render_ci_errorbar(
 
     scale = 100.0 if as_percent else 1.0
     fig = go.Figure()
-    for _, row in rows.iterrows():
+    for i, (_, row) in enumerate(rows.iterrows()):
         cell = row["study_name"]
         point = float(row[point_col]) * scale
         lo = float(row[lo_col]) * scale
@@ -225,17 +233,30 @@ def _render_ci_errorbar(
                 y=[lo, hi],
                 mode="lines",
                 line={"color": GREEN, "width": 3},
-                showlegend=False,
-                hoverinfo="skip",
+                name="95% CI",
+                legendgroup="95% CI",
+                showlegend=i == 0,
+                hovertemplate=(
+                    f"{cell}<br>95% CI: {_format_ci_point_label(lo, as_percent)}"
+                    f" – {_format_ci_point_label(hi, as_percent)}<extra></extra>"
+                ),
             )
         )
         fig.add_trace(
             go.Scatter(
                 x=[cell],
                 y=[point],
-                mode="markers",
+                mode="markers+text",
                 marker={"color": GREEN, "size": 10},
-                name=cell,
+                text=[_format_ci_point_label(point, as_percent)],
+                textposition="top center",
+                textfont={"color": TEXT, "size": 11},
+                name="Point estimate",
+                legendgroup="Point estimate",
+                showlegend=i == 0,
+                hovertemplate=(
+                    f"{cell}<br>Point estimate: {_format_ci_point_label(point, as_percent)}<extra></extra>"
+                ),
             )
         )
     fig.add_hline(y=0, line_dash="dash", line_color="#F87171")
